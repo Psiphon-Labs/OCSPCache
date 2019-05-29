@@ -1,0 +1,10 @@
+platform :ios, "8.0"
+
+# Disable sending stats
+ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+target 'OCSPCache_Tests' do
+  pod 'OCSPCache', :path => '../'
+  
+  
+end

@@ -1,0 +1,6 @@
+framework module Pods_OCSPCache_Tests {
+  umbrella header "Pods-OCSPCache_Tests-umbrella.h"
+
+  export *
+  module * { export * }
+}
