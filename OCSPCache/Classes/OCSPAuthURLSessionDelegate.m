@@ -122,13 +122,13 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
 #pragma mark - Certificate validation
 
 /// See comment in header
-- (void)evaluateTrust:(SecTrustRef)trust
+- (BOOL)evaluateTrust:(SecTrustRef)trust
     completionHandler:(AuthCompletion)completionHandler {
 
-    [self evaluateTrust:trust
-  modifyOCSPURLOverride:nil
-  sessionConfigOverride:nil
-      completionHandler:completionHandler];
+    return [self evaluateTrust:trust
+         modifyOCSPURLOverride:nil
+         sessionConfigOverride:nil
+             completionHandler:completionHandler];
 }
 
 /// See comment in header

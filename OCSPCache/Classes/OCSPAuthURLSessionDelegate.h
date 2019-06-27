@@ -56,6 +56,8 @@ typedef void (^AuthCompletion)(NSURLSessionAuthChallengeDisposition, NSURLCreden
 /// @param modifyOCSPURL Block which updates each OCSP URL. This is an opportunity for the caller to:
 /// update the URL to point through a local proxy, whitelist the URL if needed, etc. If the provided
 /// block returns nil, the original URL is used.
+/// @param sessionConfig Session configuration with which to perform OCSP requests. This is an opportunity for the caller to
+/// specify a proxy to be used by the OCSP requests. If nil, `defaultSessionConfiguration` is used.
 -  (instancetype)initWithLogger:(void (^)(NSString*))logger
                       ocspCache:(OCSPCache*)ocspCache
                   modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
@@ -67,11 +69,12 @@ typedef void (^AuthCompletion)(NSURLSessionAuthChallengeDisposition, NSURLCreden
 ///   3. OCSP remote
 ///   4. CRL with positive response and network
 ///   5. CRL with network
+/// Returns TRUE if the trust was evaulated with a postive response; otherwise returns FALSE.
 /// @param trust Target trust reference. Must include the target certificate and the certificate
 /// of its issuer.
 /// @param completionHandler Completion handler from the NSURLSessionDelegate or NSURLSessionTaskDelegate
 /// authentication challenge.
-- (void)evaluateTrust:(SecTrustRef)trust
+- (BOOL)evaluateTrust:(SecTrustRef)trust
     completionHandler:(AuthCompletion)completionHandler;
 
 /// Evaluate trust object performing certificate revocation checks in the following order:
@@ -80,10 +83,13 @@ typedef void (^AuthCompletion)(NSURLSessionAuthChallengeDisposition, NSURLCreden
 ///   3. OCSP remote
 ///   4. CRL with positive response and network
 ///   5. CRL with network
+/// Returns TRUE if the trust was evaulated with a postive response; otherwise returns FALSE.
 /// @param trust Target trust reference. Must include the target certificate and the certificate
 /// of its issuer.
-/// @param modifyOCSPURLOverride Override the block specified when OCSPAuthURLSessionDelegate is initialized. This allows
+/// @param modifyOCSPURLOverride Override the block specified when OCSPAuthURLSessionDelegate was initialized. This allows
 /// independent tasks to manage their own URL rewriting while sharing the same underlying OCSPAuthURLSessionDelegate.
+/// @param sessionConfigOverride Override the session configuration specified when OCSPAuthURLSessionDelegate was
+/// initialized. This allows independent tasks to mange the NSURLSessionConfiguration used per trust evaluation.
 /// @param completionHandler Completion handler from the NSURLSessionDelegate or NSURLSessionTaskDelegate
 /// authentication challenge.
 - (BOOL)evaluateTrust:(SecTrustRef)trust

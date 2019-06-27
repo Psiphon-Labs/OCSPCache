@@ -145,6 +145,8 @@ typedef NS_ERROR_ENUM(OCSPCacheErrorDomain, OCSPCacheErrorCode) {
  @param modifyOCSPURL Block which updates each OCSP URL. This is an opportunity for the caller to:
  update the URL to point through a local proxy, whitelist the URL if needed, etc. If the provided
  block returns nil, the original URL is used.
+ @param sessionConfig Session configuration with which to perform OCSP requests. This is an opportunity for the caller to
+ specify a proxy to be used by the OCSP requests. If nil, `defaultSessionConfiguration` is used.
  @param completion Completion handler which is called when the lookup completes. If result.err is
  set then the other values should be ignored.
  */
@@ -178,6 +180,8 @@ typedef NS_ERROR_ENUM(OCSPCacheErrorDomain, OCSPCacheErrorCode) {
  @param modifyOCSPURL Block which updates each OCSP URL. This is an opportunity for the caller to:
  update the URL to point through a local proxy, whitelist the URL if needed, etc. If the provided
  block returns nil, the original URL is used.
+ @param sessionConfig Session configuration with which to perform OCSP requests. This is an opportunity for the caller to
+ specify a proxy to be used by the OCSP requests. If nil, `defaultSessionConfiguration` is used.
  @param completion Completion handler which is called when the lookup completes. If result.err is
  set then the other values should be ignored.
  */

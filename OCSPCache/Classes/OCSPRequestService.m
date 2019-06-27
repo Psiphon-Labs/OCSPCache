@@ -32,7 +32,7 @@ NSErrorDomain _Nonnull const OCSPRequestServiceErrorDomain = @"OCSPRequestServic
 + (RACSignal<NSObject*>*)getSuccessfulOCSPResponse:(NSArray<NSURL*>*)ocspURLs
                                    ocspRequestData:(NSData*)ocspRequestData
                                      sessionConfig:(NSURLSessionConfiguration * _Nullable)sessionConfig
-                                             queue:(dispatch_queue_t)dispatchQueue
+                                             queue:(dispatch_queue_t)queue
 {
     assert([ocspURLs count] != 0);
 
@@ -45,7 +45,7 @@ NSErrorDomain _Nonnull const OCSPRequestServiceErrorDomain = @"OCSPRequestServic
              return [OCSPRequestService ocspRequest:url
                                     ocspRequestData:ocspRequestData
                                       sessionConfig:sessionConfig
-                                              queue:dispatchQueue];
+                                              queue:queue];
          }]
          takeUntilBlock:^BOOL(id  _Nullable x) {
              static int requestCount = 0;
@@ -84,7 +84,7 @@ NSErrorDomain _Nonnull const OCSPRequestServiceErrorDomain = @"OCSPRequestServic
 + (RACSignal<OCSPResponse*>*)ocspRequest:(NSURL*)ocspURL
                          ocspRequestData:(NSData*)OCSPRequestData
                            sessionConfig:(NSURLSessionConfiguration*)sessionConfig
-                                   queue:(dispatch_queue_t)dispatchQueue
+                                   queue:(dispatch_queue_t)queue
 {
     return [RACSignal createSignal:^RACDisposable *(id<RACSubscriber>  _Nonnull subscriber) {
         NSError *e = nil;
