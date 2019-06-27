@@ -21,23 +21,22 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-FOUNDATION_EXPORT NSErrorDomain const OCSPCertDomain;
+FOUNDATION_EXPORT NSErrorDomain const OCSPCertErrorDomain;
 
-typedef NS_ERROR_ENUM(OCSPCertDomain, OCSPCertCode) {
-    OCSPCertCodeUnknown = -1,
-    OCSPCertCodeInvalidTrustObject = 1,
-    OCSPCertCodeSecCertToX509Failed,
-    OCSPCertCodeNoOCSPCerts,
-    OCSPCertCodeEVPAllocFailed,
-    OCSPCertCodeCertToIdFailed,
-    OCSPCertCodeReqAllocFailed,
-    OCSPCertCodeAddCertsToReqFailed,
-    OCSPCertCodeFailedToSerializeOCSPReq,
-    OCSPCertCodeConstructedInvalidURL
+typedef NS_ERROR_ENUM(OCSPCertErrorDomain, OCSPCertErrorCode) {
+    OCSPCertErrorCodeUnknown = -1,
+    OCSPCertErrorCodeInvalidTrustObject = 1,
+    OCSPCertErrorCodeSecCertToX509Failed,
+    OCSPCertErrorCodeNoOCSPURLs,
+    OCSPCertErrorCodeEVPAllocFailed,
+    OCSPCertErrorCodeCertToIdFailed,
+    OCSPCertErrorCodeReqAllocFailed,
+    OCSPCertErrorCodeAddCertsToReqFailed,
+    OCSPCertErrorCodeFailedToSerializeOCSPReq,
+    OCSPCertErrorCodeConstructedInvalidURL
 };
 
-
-/// TODO!
+/// Access OCSP data within certificates
 @interface OCSPCert : NSObject
 
 /// Return OCSP URLs contained within the provided certificate.

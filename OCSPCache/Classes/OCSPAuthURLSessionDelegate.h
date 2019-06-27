@@ -58,7 +58,8 @@ typedef void (^AuthCompletion)(NSURLSessionAuthChallengeDisposition, NSURLCreden
 /// block returns nil, the original URL is used.
 -  (instancetype)initWithLogger:(void (^)(NSString*))logger
                       ocspCache:(OCSPCache*)ocspCache
-                  modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL;
+                  modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
+                  sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig;
 
 /// Evaluate trust object performing certificate revocation checks in the following order:
 ///   1. OCSP staple
@@ -87,6 +88,7 @@ typedef void (^AuthCompletion)(NSURLSessionAuthChallengeDisposition, NSURLCreden
 /// authentication challenge.
 - (BOOL)evaluateTrust:(SecTrustRef)trust
 modifyOCSPURLOverride:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURLOverride
+sessionConfigOverride:(NSURLSessionConfiguration*__nullable)sessionConfigOverride
     completionHandler:(AuthCompletion)completionHandler;
 
 /// NSURLSessionDelegate implementation

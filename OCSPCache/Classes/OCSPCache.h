@@ -151,12 +151,14 @@ typedef NS_ERROR_ENUM(OCSPCacheErrorDomain, OCSPCacheErrorCode) {
 - (void)lookup:(SecTrustRef)secTrustRef
     andTimeout:(NSTimeInterval)timeout
  modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
+ sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig
     completion:(void (^)(OCSPCacheLookupResult *result))completion;
 
 /// Blocking lookup
 - (OCSPCacheLookupResult*)lookup:(SecTrustRef)secTrustRef
                       andTimeout:(NSTimeInterval)timeout
-                   modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL;
+                   modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
+                   sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig;
 
 /*!
  Obtain an OCSP response for the provided certificate.
@@ -183,13 +185,15 @@ typedef NS_ERROR_ENUM(OCSPCacheErrorDomain, OCSPCacheErrorCode) {
     withIssuer:(SecCertificateRef)issuerRef
     andTimeout:(NSTimeInterval)timeout
  modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
+ sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig
     completion:(void (^)(OCSPCacheLookupResult *result))completion;
 
 /// Blocking lookup
 - (OCSPCacheLookupResult*)lookup:(SecCertificateRef)secCertRef
                       withIssuer:(SecCertificateRef)issuerRef
                       andTimeout:(NSTimeInterval)timeout
-                   modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL;
+                   modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
+                   sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig;
 
 /*!
  Set the cache value for a certificate.

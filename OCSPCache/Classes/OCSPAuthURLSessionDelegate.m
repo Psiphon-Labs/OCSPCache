@@ -26,6 +26,7 @@
     void (^logger)(NSString*);
     NSURL* (^modifyOCSPURL)(NSURL *url);
     OCSPCache* ocspCache;
+    NSURLSessionConfiguration *sessionConfig;
     void (^successfullyValidatedTrust)(SecTrustRef trust);
 }
 
@@ -45,13 +46,19 @@
 /// See comment in header
 -  (instancetype)initWithLogger:(void (^)(NSString*))logger
                       ocspCache:(nonnull OCSPCache *)ocspCache
-                  modifyOCSPURL:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCSPURL {
+                  modifyOCSPURL:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCSPURL
+                  sessionConfig:(NSURLSessionConfiguration * _Nullable)sessionConfig {
     self = [super init];
 
     if (self) {
         self->logger = logger;
         self->ocspCache = ocspCache;
         self->modifyOCSPURL = modifyOCSPURL;
+        if (sessionConfig) {
+            self->sessionConfig = sessionConfig;
+        } else {
+            self->sessionConfig = [NSURLSessionConfiguration defaultSessionConfiguration];
+        }
     }
 
     return self;
@@ -118,13 +125,17 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
 - (void)evaluateTrust:(SecTrustRef)trust
     completionHandler:(AuthCompletion)completionHandler {
 
-    [self evaluateTrust:trust modifyOCSPURLOverride:nil completionHandler:completionHandler];
+    [self evaluateTrust:trust
+  modifyOCSPURLOverride:nil
+  sessionConfigOverride:nil
+      completionHandler:completionHandler];
 }
 
 /// See comment in header
 - (BOOL)evaluateTrust:(SecTrustRef)trust
-            modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCSPURLOverride
-                completionHandler:(AuthCompletion)completionHandler {
+modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCSPURLOverride
+sessionConfigOverride:(NSURLSessionConfiguration*)sessionConfigOverride
+    completionHandler:(AuthCompletion)completionHandler {
 
     NSURL* (^modifyOCSPURL)(NSURL *url);
 
@@ -132,6 +143,13 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
         modifyOCSPURL = modifyOCSPURLOverride;
     } else {
         modifyOCSPURL = self->modifyOCSPURL;
+    }
+
+    NSURLSessionConfiguration *config;
+    if (sessionConfigOverride) {
+        config = sessionConfigOverride;
+    } else {
+        config = self->sessionConfig;
     }
 
     BOOL completed;
@@ -154,8 +172,9 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
     [self logWithFormat:@"Fetching OCSP response through OCSPCache"];
 
     OCSPCacheLookupResult *result = [self->ocspCache lookup:trust
-                                                andTimeout:0
-                                             modifyOCSPURL:modifyOCSPURL];
+                                                 andTimeout:0
+                                              modifyOCSPURL:modifyOCSPURL
+                                              sessionConfig:config];
 
     BOOL evictedResponse;
 
@@ -178,7 +197,9 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
 
         OCSPCacheLookupResult *result = [self->ocspCache lookup:trust
                                                     andTimeout:0
-                                                 modifyOCSPURL:modifyOCSPURL];
+                                                 modifyOCSPURL:modifyOCSPURL
+                                                sessionConfig:[NSURLSessionConfiguration
+                                                               ephemeralSessionConfiguration]];
 
         [self evaluateOCSPCacheResult:result
                       evictedResponse:&evictedResponse
@@ -228,7 +249,7 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
 
 /// Helper to eliminate boilerplate
 - (void)evaluateWithPolicy:(SecPolicyRef)policy
-                  trust:(SecTrustRef)trust
+                     trust:(SecTrustRef)trust
                  completed:(BOOL*)completed
         completedWithError:(BOOL*)completedWithError
          completionHandler:(AuthCompletion)completionHandler {

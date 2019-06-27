@@ -24,9 +24,9 @@
 #import <openssl/x509v3.h>
 #import "OCSPOpenSSLBridge.h"
 #import "OCSPTrustToLeafAndIssuer.h"
-#import "OCSPCertEncode.h"
+#import "OCSPURLEncode.h"
 
-NSErrorDomain _Nonnull const OCSPCertDomain = @"OCSPCertDomain";
+NSErrorDomain _Nonnull const OCSPCertErrorDomain = @"OCSPCertErrorDomain";
 
 @implementation OCSPCert
 
@@ -46,15 +46,14 @@ NSErrorDomain _Nonnull const OCSPCertDomain = @"OCSPCertDomain";
                                                      error:&e];
 
     if (e) {
-        *error = [NSError errorWithDomain:OCSPCertDomain
-                                     code:OCSPCertCodeInvalidTrustObject
+        *error = [NSError errorWithDomain:OCSPCertErrorDomain
+                                     code:OCSPCertErrorCodeInvalidTrustObject
                                  userInfo:@{NSLocalizedDescriptionKey:@"Invalid trust object",
                                             NSUnderlyingErrorKey:e}];
         return nil;
     }
 
     NSArray<NSURL*>* urls = [OCSPCert ocspURLsFromSecCertRef:leaf
-                                          withIssuerCertRef:issuer
                                                       error:error];
 
     return urls;
@@ -66,8 +65,8 @@ NSErrorDomain _Nonnull const OCSPCertDomain = @"OCSPCertDomain";
     
     X509 *leaf = [OCSPOpenSSLBridge secCertRefToX509:secCertRef];
     if (leaf == NULL) {
-        *error = [NSError errorWithDomain:OCSPCertDomain
-                                     code:OCSPCertCodeSecCertToX509Failed
+        *error = [NSError errorWithDomain:OCSPCertErrorDomain
+                                     code:OCSPCertErrorCodeSecCertToX509Failed
                                  userInfo:@{NSLocalizedDescriptionKey:@"Failed to convert leaf "
                                                                        "cert to OpenSSL X509 "
                                                                        "object"}];
@@ -80,25 +79,10 @@ NSErrorDomain _Nonnull const OCSPCertDomain = @"OCSPCertDomain";
         X509_free(leaf);
     }];
     
-    X509 *issuer = [OCSPOpenSSLBridge secCertRefToX509:issuerCertRef];
-    if (issuer == NULL) {
-        *error = [NSError errorWithDomain:OCSPCertDomain
-                                     code:OCSPCertCodeSecCertToX509Failed
-                                 userInfo:@{NSLocalizedDescriptionKey:@"Failed to convert issuer "
-                                                                       "cert to OpenSSL X509 "
-                                                                       "object"}];
-        [OCSPCert execCleanupTasks:cleanup];
-        return nil;
-    }
-    
-    [cleanup addObject:^(){
-        X509_free(issuer);
-    }];
-    
     NSArray<NSString*>* ocspURLStrings = [OCSPCert OCSPCerts:leaf];
     if ([ocspURLStrings count] == 0) {
-        *error = [NSError errorWithDomain:OCSPCertDomain
-                                     code:OCSPCertCodeNoOCSPCerts
+        *error = [NSError errorWithDomain:OCSPCertErrorDomain
+                                     code:OCSPCertErrorCodeNoOCSPURLs
                                  userInfo:@{NSLocalizedDescriptionKey:@"Found 0 OCSP URLs in "
                                                                        "leaf certificate"}];
         [OCSPCert execCleanupTasks:cleanup];
@@ -119,8 +103,8 @@ NSErrorDomain _Nonnull const OCSPCertDomain = @"OCSPCertDomain";
                                          "for OCSP request: %@",
                                          ocspURLString];
 
-            *error = [NSError errorWithDomain:OCSPCertDomain
-                                         code:OCSPCertCodeConstructedInvalidURL
+            *error = [NSError errorWithDomain:OCSPCertErrorDomain
+                                         code:OCSPCertErrorCodeConstructedInvalidURL
                                      userInfo:@{NSLocalizedDescriptionKey:localizedDescription}];
 
             [OCSPCert execCleanupTasks:cleanup];
@@ -150,8 +134,8 @@ NSErrorDomain _Nonnull const OCSPCertDomain = @"OCSPCertDomain";
                                                      error:&e];
 
     if (e) {
-        *error = [NSError errorWithDomain:OCSPCertDomain
-                                     code:OCSPCertCodeInvalidTrustObject
+        *error = [NSError errorWithDomain:OCSPCertErrorDomain
+                                     code:OCSPCertErrorCodeInvalidTrustObject
                                  userInfo:@{NSLocalizedDescriptionKey:@"Invalid trust object",
                                             NSUnderlyingErrorKey:e}];
         return nil;
@@ -169,8 +153,8 @@ NSErrorDomain _Nonnull const OCSPCertDomain = @"OCSPCertDomain";
 
     X509 *leaf = [OCSPOpenSSLBridge secCertRefToX509:secCertRef];
     if (leaf == NULL) {
-        *error = [NSError errorWithDomain:OCSPCertDomain
-                                     code:OCSPCertCodeSecCertToX509Failed
+        *error = [NSError errorWithDomain:OCSPCertErrorDomain
+                                     code:OCSPCertErrorCodeSecCertToX509Failed
                                  userInfo:@{NSLocalizedDescriptionKey:@"Failed to convert leaf "
                                             "cert to OpenSSL X509 "
                                             "object"}];
@@ -183,8 +167,8 @@ NSErrorDomain _Nonnull const OCSPCertDomain = @"OCSPCertDomain";
 
     X509 *issuer = [OCSPOpenSSLBridge secCertRefToX509:issuerCertRef];
     if (issuer == NULL) {
-        *error = [NSError errorWithDomain:OCSPCertDomain
-                                     code:OCSPCertCodeSecCertToX509Failed
+        *error = [NSError errorWithDomain:OCSPCertErrorDomain
+                                     code:OCSPCertErrorCodeSecCertToX509Failed
                                  userInfo:@{NSLocalizedDescriptionKey:@"Failed to convert issuer "
                                             "cert to OpenSSL X509 "
                                             "object"}];
@@ -196,8 +180,8 @@ NSErrorDomain _Nonnull const OCSPCertDomain = @"OCSPCertDomain";
 
     const EVP_MD *cert_id_md = EVP_sha1();
     if (cert_id_md == NULL) {
-        *error = [NSError errorWithDomain:OCSPCertDomain
-                                     code:OCSPCertCodeEVPAllocFailed
+        *error = [NSError errorWithDomain:OCSPCertErrorDomain
+                                     code:OCSPCertErrorCodeEVPAllocFailed
                                  userInfo:@{NSLocalizedDescriptionKey:@"Failed to allocate new EVP "
                                             "sha1"}];
         [OCSPCert execCleanupTasks:cleanup];
@@ -206,8 +190,8 @@ NSErrorDomain _Nonnull const OCSPCertDomain = @"OCSPCertDomain";
 
     OCSP_CERTID *id_t = OCSP_cert_to_id(cert_id_md, leaf, issuer);
     if (id_t == NULL) {
-        *error = [NSError errorWithDomain:OCSPCertDomain
-                                     code:OCSPCertCodeCertToIdFailed
+        *error = [NSError errorWithDomain:OCSPCertErrorDomain
+                                     code:OCSPCertErrorCodeCertToIdFailed
                                  userInfo:@{NSLocalizedDescriptionKey:@"Failed to create "
                                             "OCSP_CERTID structure"}];
         [OCSPCert execCleanupTasks:cleanup];
@@ -216,8 +200,8 @@ NSErrorDomain _Nonnull const OCSPCertDomain = @"OCSPCertDomain";
 
     OCSP_REQUEST *req = OCSP_REQUEST_new();
     if (req == NULL) {
-        *error = [NSError errorWithDomain:OCSPCertDomain
-                                     code:OCSPCertCodeReqAllocFailed
+        *error = [NSError errorWithDomain:OCSPCertErrorDomain
+                                     code:OCSPCertErrorCodeReqAllocFailed
                                  userInfo:@{NSLocalizedDescriptionKey:@"Failed to allocate new "
                                             "OCSP request"}];
         [OCSPCert execCleanupTasks:cleanup];
@@ -229,8 +213,8 @@ NSErrorDomain _Nonnull const OCSPCertDomain = @"OCSPCertDomain";
     }];
 
     if (OCSP_request_add0_id(req, id_t) == NULL) {
-        *error = [NSError errorWithDomain:OCSPCertDomain
-                                     code:OCSPCertCodeAddCertsToReqFailed
+        *error = [NSError errorWithDomain:OCSPCertErrorDomain
+                                     code:OCSPCertErrorCodeAddCertsToReqFailed
                                  userInfo:@{NSLocalizedDescriptionKey:@"Failed to add certs to "
                                             "OCSP request"}];
         [OCSPCert execCleanupTasks:cleanup];
@@ -242,8 +226,8 @@ NSErrorDomain _Nonnull const OCSPCertDomain = @"OCSPCertDomain";
     int len = i2d_OCSP_REQUEST(req, &ocspReq);
 
     if (ocspReq == NULL) {
-        *error = [NSError errorWithDomain:OCSPCertDomain
-                                     code:OCSPCertCodeFailedToSerializeOCSPReq
+        *error = [NSError errorWithDomain:OCSPCertErrorDomain
+                                     code:OCSPCertErrorCodeFailedToSerializeOCSPReq
                                  userInfo:@{NSLocalizedDescriptionKey:@"Failed to serialize "
                                             "OCSP request"}];
         [OCSPCert execCleanupTasks:cleanup];

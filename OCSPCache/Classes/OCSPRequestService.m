@@ -17,102 +17,129 @@
  *
  */
 
-#import "OCSPService.h"
+#import "OCSPRequestService.h"
 #import <openssl/ocsp.h>
 #import "OCSPResponse.h"
 #import "RACReplaySubject.h"
+#import "RACSequence.h"
+#import "NSArray+RACSequenceAdditions.h"
 
-NSErrorDomain _Nonnull const OCSPServiceErrorDomain = @"OCSPServiceErrorDomain";
+NSErrorDomain _Nonnull const OCSPRequestServiceErrorDomain = @"OCSPRequestServiceErrorDomain";
 
-@implementation OCSPService
-
-/*
- * Check in SecTrustRef (X.509 cert) for Online Certificate Status Protocol (1.3.6.1.5.5.7.48.1)
- * authority information access method. This is found in the
- * Certificate Authority Information Access (1.3.6.1.5.5.7.1.1) X.509v3 extension.
- *
- * A OCSP request is constructed for each OCSP URL within the certificate. An OCSP request using the
- * GET method is constructed as follows:
- * {url}/{url-encoding of base-64 encoding of the DER encoding of the OCSPRequest}
- *
- * OCSP GET request format: https://tools.ietf.org/html/rfc2560#appendix-A.1.1
- * X.509 Authority Information Access: https://tools.ietf.org/html/rfc2459#section-4.2.2.1
- */
+@implementation OCSPRequestService
 
 // See comment in header
-+ (RACSignal<NSObject*>*)getOCSPData:(NSArray<NSURL*>*)ocspURLs
-                     withOCSPRequestData:(NSData*)OCSPRequestData
-                            onQueue:(dispatch_queue_t)dispatchQueue
++ (RACSignal<NSObject*>*)getSuccessfulOCSPResponse:(NSArray<NSURL*>*)ocspURLs
+                                   ocspRequestData:(NSData*)ocspRequestData
+                                     sessionConfig:(NSURLSessionConfiguration * _Nullable)sessionConfig
+                                             queue:(dispatch_queue_t)dispatchQueue
+{
+    assert([ocspURLs count] != 0);
+
+    return [RACSignal createSignal:^RACDisposable *(id<RACSubscriber>  _Nonnull subscriber) {
+        RACSequence *urls = ocspURLs.rac_sequence;
+
+        RACSignal *signal =
+        [[[urls signal]
+         flattenMap:^__kindof RACSignal * _Nullable(NSURL *url) {
+             return [OCSPRequestService ocspRequest:url
+                                    ocspRequestData:ocspRequestData
+                                      sessionConfig:sessionConfig
+                                              queue:dispatchQueue];
+         }]
+         takeUntilBlock:^BOOL(id  _Nullable x) {
+             static int requestCount = 0;
+             if ([x isKindOfClass:[OCSPResponse class]]) {
+                 if ([x success]) {
+                     // Successful response, stop making requests and complete
+                     [subscriber sendNext:x];
+                     [subscriber sendCompleted];
+                 }
+             }
+
+             requestCount++;
+
+             if (requestCount == [ocspURLs count]) {
+                 // No successful response could be obtained, send an error
+                 NSError *error =
+                 [NSError errorWithDomain:OCSPRequestServiceErrorDomain
+                                     code:OCSPRequestServiceErrorCodeNoSuccessfulResponse
+                                 userInfo:@{NSLocalizedDescriptionKey:@"No successful subscriber"}];
+                 [subscriber sendError:error];
+                 return TRUE;
+             }
+
+             return FALSE;
+         }];
+
+        [signal subscribeCompleted:^{
+            // Kick off cold signal
+        }];
+
+        return nil;
+    }];
+}
+
+/// See comment in header
++ (RACSignal<OCSPResponse*>*)ocspRequest:(NSURL*)ocspURL
+                         ocspRequestData:(NSData*)OCSPRequestData
+                           sessionConfig:(NSURLSessionConfiguration*)sessionConfig
+                                   queue:(dispatch_queue_t)dispatchQueue
 {
     return [RACSignal createSignal:^RACDisposable *(id<RACSubscriber>  _Nonnull subscriber) {
-        dispatch_async(dispatchQueue, ^{
-            if ([ocspURLs count] == 0) {
+        NSError *e = nil;
+        NSURLSessionConfiguration *config;
+
+        if (sessionConfig) {
+            config = sessionConfig;
+        } else {
+            config = [NSURLSessionConfiguration defaultSessionConfiguration];
+        }
+
+        NSURLSession *session =
+        [NSURLSession sessionWithConfiguration:config
+                                      delegate:nil
+                                 delegateQueue:NSOperationQueue.currentQueue];
+
+        // Make an OCSP request with the POST method.
+        // OCSP POST request format: https://tools.ietf.org/html/rfc2560#appendix-A.1.1
+
+        NSMutableURLRequest *ocspReq = [NSMutableURLRequest requestWithURL:ocspURL];
+        ocspReq.HTTPMethod = @"POST";
+        [ocspReq addValue:@"application/ocsp-request" forHTTPHeaderField:@"Content-Type"];
+        [ocspReq setHTTPBody:OCSPRequestData];
+
+        NSURLSessionDataTask *dataTask =
+        [session dataTaskWithRequest:ocspReq
+                   completionHandler:^(NSData * _Nullable data,
+                                       NSURLResponse * _Nullable response,
+                                       NSError * _Nullable error) {
+            if (e != nil) {
                 NSError *error =
-                [NSError errorWithDomain:OCSPServiceErrorDomain
-                                    code:OCSPServiceErrorCodeNoURLs
-                                userInfo:@{NSLocalizedDescriptionKey:@"No URLs provided"}];
-                [subscriber sendError:error];
+                [NSError errorWithDomain:OCSPRequestServiceErrorDomain
+                                    code:OCSPRequestServiceErrorCodeRequestFailed
+                                userInfo:@{NSLocalizedDescriptionKey:@"OCSP request failed",
+                                           NSUnderlyingErrorKey:e}];
+                [subscriber sendNext:error];
+                [subscriber sendCompleted];
                 return;
             }
 
-            for (NSURL *ocspURL in ocspURLs) {
-                NSError *e = nil;
-
-                NSURLSessionConfiguration *config =
-                [NSURLSessionConfiguration ephemeralSessionConfiguration];
-
-                NSURLSession *session =
-                [NSURLSession sessionWithConfiguration:config
-                                              delegate:nil
-                                         delegateQueue:NSOperationQueue.currentQueue];
-
-                NSMutableURLRequest *ocspReq = [NSMutableURLRequest requestWithURL:ocspURL];
-                ocspReq.HTTPMethod = @"POST";
-                [ocspReq addValue:@"application/ocsp-request" forHTTPHeaderField:@"Content-Type"];
-                [ocspReq setHTTPBody:OCSPRequestData];
-
-                NSURLSessionDataTask *dataTask =
-                [session dataTaskWithRequest:ocspReq
-                           completionHandler:^(NSData * _Nullable data,
-                                               NSURLResponse * _Nullable response,
-                                               NSError * _Nullable error) {
-                               if (e != nil) {
-                                   NSError *error =
-                                   [NSError errorWithDomain:OCSPServiceErrorDomain
-                                                       code:OCSPServiceErrorCodeRequestFailed
-                                                   userInfo:@{NSLocalizedDescriptionKey:@"OCSP request failed",
-                                                              NSUnderlyingErrorKey:e}];
-                                   [subscriber sendNext:error];
-                               }
-
-                               OCSPResponse *r = [[OCSPResponse alloc] initWithData:data];
-                               if (!r) {
-                                   // Invalid OCSP Response Data
-                                   NSError *error =
-                                   [NSError errorWithDomain:OCSPServiceErrorDomain
-                                                       code:OCSPServiceErrorCodeInvalidResponseData
-                                                   userInfo:@{NSLocalizedDescriptionKey:@"Invalid subscriber data"}];
-                                   [subscriber sendNext:error];
-                               }
-
-                               [subscriber sendNext:r];
-
-                               if ([r status] == OCSP_RESPONSE_STATUS_SUCCESSFUL) {
-                                   return;
-                               }
-                           }];
-                [dataTask resume];
-                return; // TEMP
+            OCSPResponse *r = [[OCSPResponse alloc] initWithData:data];
+            if (!r) {
+                // Invalid OCSP Response Data
+                NSError *error =
+                [NSError errorWithDomain:OCSPRequestServiceErrorDomain
+                                    code:OCSPRequestServiceErrorCodeInvalidResponseData
+                                userInfo:@{NSLocalizedDescriptionKey:@"Invalid OCSP response data"}];
+                [subscriber sendNext:error];
+                [subscriber sendCompleted];
             }
 
-            // No successful response could be obtained
-            NSError *error =
-            [NSError errorWithDomain:OCSPServiceErrorDomain
-                                code:OCSPServiceErrorCodeNoSuccessfulResponse
-                            userInfo:@{NSLocalizedDescriptionKey:@"No successful subscriber"}];
-            [subscriber sendError:error];
-        });
-
+            [subscriber sendNext:r];
+            [subscriber sendCompleted];
+        }];
+        [dataTask resume];
         return nil;
     }];
 }

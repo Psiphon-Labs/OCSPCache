@@ -23,20 +23,15 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-FOUNDATION_EXPORT NSErrorDomain const OCSPServiceErrorDomain;
+FOUNDATION_EXPORT NSErrorDomain const OCSPRequestServiceErrorDomain;
 
-/// Error codes which can be returned by OCSPService
-typedef NS_ERROR_ENUM(OCSPServiceErrorDomain, OCSPServiceErrorCode) {
+/// Error codes which can be returned by OCSPRequestService
+typedef NS_ERROR_ENUM(OCSPRequestServiceErrorDomain, OCSPRequestServiceErrorCode) {
 
     /*!
      * Unknown error.
      */
-    OCSPServiceErrorCodeUnknown = -1,
-
-    /*!
-     * No URLs provided.
-     */
-    OCSPServiceErrorCodeNoURLs = 1,
+    OCSPRequestServiceErrorCodeUnknown = -1,
 
     /*!
      * Failed network request.
@@ -45,22 +40,22 @@ typedef NS_ERROR_ENUM(OCSPServiceErrorDomain, OCSPServiceErrorCode) {
      * [error.userInfo objectForKey:NSUnderlyingErrorKey]
      * @endcode
      */
-    OCSPServiceErrorCodeRequestFailed,
+    OCSPRequestServiceErrorCodeRequestFailed = 1,
 
     /*!
      * Invalid data returned from OCSP request.
      * The network request was successful, but the response data
      * could not be deserialized successfully into an OCSP Response.
      */
-    OCSPServiceErrorCodeInvalidResponseData,
+    OCSPRequestServiceErrorCodeInvalidResponseData,
 
     /*!
      * No successful OCSP response could be obtained.
      */
-    OCSPServiceErrorCodeNoSuccessfulResponse
+    OCSPRequestServiceErrorCodeNoSuccessfulResponse
 };
 
-@interface OCSPService : NSObject
+@interface OCSPRequestService : NSObject
 
 /*!
  Cold terminating signal which completes when a successful OCSP response is retrieved. If no successful response can be retrieved, an
@@ -71,13 +66,28 @@ typedef NS_ERROR_ENUM(OCSPServiceErrorDomain, OCSPServiceErrorCode) {
 
  OCSP URLs are attempted in order.
 
- @param ocspURLs OCSP URLs with base 64 encoded OCSP request data for HTTP GET request. See
- OCSPURL.h.
+ @param ocspURLs OCSP server URLs.
  @param dispatchQueue Dispatch queue which the network requests should be made on.
  */
-+ (RACSignal<NSObject*>*)getOCSPData:(NSArray<NSURL*>*)ocspURLs
-                 withOCSPRequestData:(NSData*)OCSPRequestData
-                             onQueue:(dispatch_queue_t)dispatchQueue;
++ (RACSignal<NSObject*>*)getSuccessfulOCSPResponse:(NSArray<NSURL*>*)ocspURLs
+                                   ocspRequestData:(NSData*)OCSPRequestData
+                                     sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig
+                                             queue:(dispatch_queue_t)dispatchQueue;
+
+/*!
+ Cold terminating signal which performs an OCSP request with the POST method.
+
+ Emits either OCSPResponse or NSError and then completes.
+
+ See: https://tools.ietf.org/html/rfc2560#appendix-A.1.1
+
+ @param ocspURL OCSP server URL to make an OCSP request to.
+ @param dispatchQueue Dispatch queue which the network requests should be made on.
+ */
++ (RACSignal<NSObject*>*)ocspRequest:(NSURL*)ocspURL
+                     ocspRequestData:(NSData*)ocspRequestData
+                       sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig
+                               queue:(dispatch_queue_t)dispatchQueue;
 
 @end
 

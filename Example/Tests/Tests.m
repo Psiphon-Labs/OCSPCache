@@ -22,7 +22,7 @@
 #import <openssl/ocsp.h>
 #import "OCSPAuthURLSessionDelegate.h"
 #import "OCSPCache.h"
-#import "OCSPURL.h"
+#import "OCSPCert.h"
 #import "OCSPError.h"
 
 @interface Tests : XCTestCase
@@ -72,8 +72,9 @@
 
     OCSPAuthURLSessionDelegate *authURLSessionDelegate =
     [[OCSPAuthURLSessionDelegate alloc] initWithLogger:logger
-                                         ocspCache:ocspCache
-                                     modifyOCSPURL:modifyOCSPURL];
+                                             ocspCache:ocspCache
+                                         modifyOCSPURL:modifyOCSPURL
+                                         sessionConfig:nil];
 
     NSURLSessionConfiguration *config = [NSURLSessionConfiguration ephemeralSessionConfiguration];
 
@@ -177,6 +178,7 @@
     [ocspCache lookup:trust
            andTimeout:10
         modifyOCSPURL:nil
+        sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
            completion:^(OCSPCacheLookupResult * _Nonnull result) {
         [self checkResultAndEvaluate:trust
                                 cert:cert
@@ -264,6 +266,7 @@
                withIssuer:issuer
                andTimeout:10
             modifyOCSPURL:nil
+            sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
                completion:
          ^(OCSPCacheLookupResult *result) {
              XCTAssert(result != nil);
@@ -324,6 +327,7 @@
            withIssuer:issuer
            andTimeout:defaultTimeout
         modifyOCSPURL:nil
+        sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
            completion:
      ^(OCSPCacheLookupResult *r) {
          XCTAssert(r.response == nil);
@@ -332,8 +336,8 @@
          XCTAssert(r.err.code == OCSPCacheErrorConstructingOCSPRequests);
          NSError *underlyingError = [r.err.userInfo objectForKey:NSUnderlyingErrorKey];
          XCTAssert(underlyingError != nil);
-         XCTAssert(underlyingError.domain == OCSPErrorDomain);
-         XCTAssert(underlyingError.code == OCSPErrorCodeNoOCSPURLs);
+         XCTAssert(underlyingError.domain == OCSPCertErrorDomain);
+         XCTAssert(underlyingError.code == OCSPCertErrorCodeNoOCSPURLs);
          XCTAssert(r.cached == FALSE);
 
          [expectResult fulfill];
@@ -385,6 +389,7 @@
            withIssuer:issuer
            andTimeout:defaultTimeout
         modifyOCSPURL:nil
+        sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
            completion:
      ^(OCSPCacheLookupResult *r) {
          XCTAssert(r.response == nil);
@@ -534,7 +539,8 @@
        withIssuer:issuerRef
        andTimeout:timeout
      modifyOCSPURL:nil
-       completion:
+     sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
+        completion:
      ^(OCSPCacheLookupResult * _Nonnull result) {
 
          [self checkResultAndEvaluate:trust

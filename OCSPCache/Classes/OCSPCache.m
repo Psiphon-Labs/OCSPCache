@@ -20,8 +20,8 @@
 #import "OCSPCache.h"
 #import <CommonCrypto/CommonDigest.h>
 #import "OCSPTrustToLeafAndIssuer.h"
-#import "OCSPService.h"
-#import "OCSPURL.h"
+#import "OCSPRequestService.h"
+#import "OCSPCert.h"
 #import "RACScheduler.h"
 #import "RACReplaySubject.h"
 #import "RACSignal+Operations.h"
@@ -127,6 +127,7 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
 - (void)lookup:(SecTrustRef)secTrustRef
     andTimeout:(NSTimeInterval)timeout
  modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
+ sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig
     completion:(void (^)(OCSPCacheLookupResult *result))completion {
 
     NSError *e;
@@ -154,14 +155,16 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
       withIssuer:issuer
       andTimeout:timeout
    modifyOCSPURL:modifyOCSPURL
+   sessionConfig:sessionConfig
       completion:completion];
 }
 
 /// See comment in header
 - (OCSPCacheLookupResult*)lookup:(SecTrustRef)secTrustRef
                       andTimeout:(NSTimeInterval)timeout
-                   modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL {
-
+                   modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
+                   sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig
+{
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
 
     __block OCSPCacheLookupResult* r;
@@ -169,6 +172,7 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
     [self lookup:secTrustRef
       andTimeout:timeout
    modifyOCSPURL:modifyOCSPURL
+   sessionConfig:sessionConfig
       completion:^(OCSPCacheLookupResult * _Nonnull result) {
           r = result;
         dispatch_semaphore_signal(sem);
@@ -185,6 +189,7 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
     withIssuer:(SecCertificateRef)issuerRef
     andTimeout:(NSTimeInterval)timeout
  modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
+ sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig
     completion:(void (^)(OCSPCacheLookupResult *result))completion {
 
     __weak OCSPCache *weakSelf = self;
@@ -260,15 +265,41 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
         // will return an error if there are 0 OCSP URLs in the certificate, so we do not
         // need to double check.
         NSError *errorGettingOCSPURLs;
-        NSArray<NSURL*>* urls = [OCSPURL ocspURLsFromSecCertRef:secCertRef
-                                              withIssuerCertRef:issuerRef
-                                                          error:&errorGettingOCSPURLs];
+        NSArray<NSURL*>* urls = [OCSPCert ocspURLsFromSecCertRef:secCertRef
+                                                           error:&errorGettingOCSPURLs];
         if (errorGettingOCSPURLs != nil) {
             NSError *err =
             [NSError errorWithDomain:OCSPCacheErrorDomain
                                 code:OCSPCacheErrorConstructingOCSPRequests
                             userInfo:@{NSLocalizedDescriptionKey:@"Error constructing OCSP "
                                                                   "requests",
+                                       NSUnderlyingErrorKey:errorGettingOCSPURLs}];
+            [self logError:err];
+            @synchronized (self) {
+                [self->pendingResponseCache removeObjectForKey:key];
+            }
+            [response sendError:err];
+            dispatch_async(strongSelf->callbackQueue, ^{
+                completion([OCSPCacheLookupResult lookupResultWithResponse:nil
+                                                                     error:err
+                                                                    cached:FALSE]);
+            });
+            return;
+        }
+
+        // Get data required for OCSP request with the POST method
+
+        NSError *errorGettingOCSPRequestData;
+        NSData *ocspReqData = [OCSPCert ocspDataForPostRequestFromSecCertRef:secCertRef
+                                                           withIssuerCertRef:issuerRef
+                                                                       error:&errorGettingOCSPURLs];
+
+        if (errorGettingOCSPRequestData != nil) {
+            NSError *err =
+            [NSError errorWithDomain:OCSPCacheErrorDomain
+                                code:OCSPCacheErrorConstructingOCSPRequests
+                            userInfo:@{NSLocalizedDescriptionKey:@"Error constructing OCSP "
+                                       "requests",
                                        NSUnderlyingErrorKey:errorGettingOCSPURLs}];
             [self logError:err];
             @synchronized (self) {
@@ -297,7 +328,10 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
 
         // Make OCSP requests
 
-        [[OCSPService getOCSPData:urls onQueue:strongSelf->workQueue]
+        [[OCSPRequestService getSuccessfulOCSPResponse:urls
+                                       ocspRequestData:ocspReqData
+                                         sessionConfig:sessionConfig
+                                                 queue:strongSelf->workQueue]
          subscribeNext:^(NSObject * _Nullable x) {
              // OCSPService emits NSError and OCSPResponse
              // - Each error encountered is emitted
@@ -390,8 +424,9 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
 - (OCSPCacheLookupResult*)lookup:(SecCertificateRef)secCertRef
                       withIssuer:(SecCertificateRef)issuerRef
                       andTimeout:(NSTimeInterval)timeout
-                   modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL {
-
+                   modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
+                   sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig
+{
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
 
     __block OCSPCacheLookupResult* r;
@@ -400,6 +435,8 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
       withIssuer:issuerRef
       andTimeout:timeout
    modifyOCSPURL:modifyOCSPURL
+   sessionConfig:[NSURLSessionConfiguration
+                  ephemeralSessionConfiguration]
       completion:^(OCSPCacheLookupResult * _Nonnull result) {
           r = result;
           dispatch_semaphore_signal(sem);
