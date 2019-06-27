@@ -691,7 +691,7 @@ Public License instead of this License.  But first, please read
 
 </string>
 			<key>License</key>
-			<string>GPL</string>
+			<string>GNU General Public License v3.0</string>
 			<key>Title</key>
 			<string>OCSPCache</string>
 			<key>Type</key>

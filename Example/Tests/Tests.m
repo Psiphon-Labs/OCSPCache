@@ -20,6 +20,7 @@
 @import XCTest;
 
 #import <openssl/ocsp.h>
+#import "OCSPAuthURLSessionDelegate.h"
 #import "OCSPCache.h"
 #import "OCSPURL.h"
 #import "OCSPError.h"
@@ -51,6 +52,62 @@
  * NOTE: To clear the OCSP cache of the simulator use `Hardware->Erase All Content and Settings...`
  */
 
+#pragma mark - Network request with authentication challenge
+
+// Network request with an authentication challenge to exercise AuthURLSessionDelegate
+- (void)testNetworkRequestWithAuthenticationChallenge {
+    NSURLSessionConfiguration *config = [NSURLSessionConfiguration ephemeralSessionConfiguration];
+
+    void (^logger)(NSString * _Nonnull logLine) =
+    ^(NSString * _Nonnull logLine) {
+        NSLog(@"[AuthURLSessionDelegate] %@", logLine);
+    };
+
+    NSURL* (^modifyOCSPURL)(NSURL *url) =
+    ^NSURL*(NSURL *url) {
+        NSLog(@"[AuthURLSessionDelegate] Making OCSP request to %@", url);
+        return nil;
+    };
+
+    OCSPCache *ocspCache = [[OCSPCache alloc] initWithLogger:logger];
+
+    OCSPAuthURLSessionDelegate *authURLSessionDelegate =
+    [[OCSPAuthURLSessionDelegate alloc] initWithLogger:logger
+                                         ocspCache:ocspCache
+                                     modifyOCSPURL:modifyOCSPURL];
+
+    NSURLSession *session =
+    [NSURLSession sessionWithConfiguration:config
+                                  delegate:authURLSessionDelegate
+                             delegateQueue:NSOperationQueue.currentQueue];
+
+    XCTestExpectation *expectResult =
+    [self expectationWithDescription:@"Expected result from network request"];
+
+    NSURLSessionDataTask *dataTask =
+    [session dataTaskWithURL:[NSURL URLWithString:@"https://github.com/robots.txt"]
+           completionHandler:^(NSData * _Nullable data,
+                               NSURLResponse * _Nullable response,
+                               NSError * _Nullable error) {
+
+               XCTAssert(error == nil);
+               XCTAssert(response != nil);
+
+               [expectResult fulfill];
+           }
+     ];
+
+    [dataTask resume];
+
+    [self waitForExpectationsWithTimeout:60 handler:^(NSError * _Nullable error) {
+        if (error != nil) {
+            XCTFail(@"Timed out waiting for expectations: %@", error.localizedDescription);
+        }
+    }];
+}
+
+#pragma mark - Google Certificates
+
 // Test OCSPCache with Google Certificate
 - (void)testGoogleCertificates
 {
@@ -81,6 +138,8 @@
 
     [self ocspCacheTestWithCert:cert andIssuer:issuer];
 }
+
+#pragma mark - Cache lookup with trust
 
 // Test OCSP Cache with trust object lookup
 - (void)testCacheLookupWithTrust
@@ -135,6 +194,8 @@
     }];
 }
 
+#pragma mark - Demo CA
+
 // Test OCSP Cache with Demo CA Certificate using local OCSP Server
 - (void)testDemoCAWithGoodCertificate
 {
@@ -158,6 +219,8 @@
 
     [self ocspCacheTestWithCert:cert andIssuer:issuer];
 }
+
+#pragma mark - Cache race
 
 // Test OCSP Cache with Demo CA Certificate using local OCSP Server
 // Do many lookups in parallel and ensure that all the results are
@@ -223,6 +286,8 @@
     }];
 }
 
+#pragma mark - No OCSP URLs
+
 // Certificate with no OCSP URLs should return an error
 - (void)testDemoCAWithCertificateWithNoOCSPURLs {
     NSTimeInterval defaultTimeout = 10;
@@ -279,6 +344,8 @@
         }
     }];
 }
+
+# pragma mark - Bad OCSP URLs
 
 // Test OCSP Cache with Demo CA Certificate with bad OCSP URLs using local OCSP Server
 - (void)testDemoCAWithCertificateWithBadOCSPURLs
