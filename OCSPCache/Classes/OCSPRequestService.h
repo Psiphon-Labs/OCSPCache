@@ -76,6 +76,7 @@ typedef NS_ERROR_ENUM(OCSPServiceErrorDomain, OCSPServiceErrorCode) {
  @param dispatchQueue Dispatch queue which the network requests should be made on.
  */
 + (RACSignal<NSObject*>*)getOCSPData:(NSArray<NSURL*>*)ocspURLs
+                 withOCSPRequestData:(NSData*)OCSPRequestData
                              onQueue:(dispatch_queue_t)dispatchQueue;
 
 @end
