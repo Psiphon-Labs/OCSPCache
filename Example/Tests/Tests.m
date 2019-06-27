@@ -54,18 +54,17 @@
 
 #pragma mark - Network request with authentication challenge
 
-// Network request with an authentication challenge to exercise AuthURLSessionDelegate
+// Network request with an authentication challenge to exercise OCSPAuthURLSessionDelegate
 - (void)testNetworkRequestWithAuthenticationChallenge {
-    NSURLSessionConfiguration *config = [NSURLSessionConfiguration ephemeralSessionConfiguration];
 
     void (^logger)(NSString * _Nonnull logLine) =
     ^(NSString * _Nonnull logLine) {
-        NSLog(@"[AuthURLSessionDelegate] %@", logLine);
+        NSLog(@"[OCSPAuthURLSessionDelegate] %@", logLine);
     };
 
     NSURL* (^modifyOCSPURL)(NSURL *url) =
     ^NSURL*(NSURL *url) {
-        NSLog(@"[AuthURLSessionDelegate] Making OCSP request to %@", url);
+        NSLog(@"[OCSPAuthURLSessionDelegate] Making OCSP request to %@", url);
         return nil;
     };
 
@@ -75,6 +74,8 @@
     [[OCSPAuthURLSessionDelegate alloc] initWithLogger:logger
                                          ocspCache:ocspCache
                                      modifyOCSPURL:modifyOCSPURL];
+
+    NSURLSessionConfiguration *config = [NSURLSessionConfiguration ephemeralSessionConfiguration];
 
     NSURLSession *session =
     [NSURLSession sessionWithConfiguration:config
@@ -350,7 +351,7 @@
 // Test OCSP Cache with Demo CA Certificate with bad OCSP URLs using local OCSP Server
 - (void)testDemoCAWithCertificateWithBadOCSPURLs
 {
-    NSTimeInterval defaultTimeout = 15;
+    NSTimeInterval defaultTimeout = 5;
 
     Error *e;
 

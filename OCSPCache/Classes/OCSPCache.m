@@ -297,41 +297,47 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
 
         // Make OCSP requests
 
-        [OCSPService getOCSPData:urls
-                     onQueue:strongSelf->workQueue
-                  withCompletion:^(OCSPResponse * _Nonnull successfulResponse,
-                                   NSArray<OCSPResponse *> * _Nonnull failedResponses,
-                                   NSArray<NSError *> * _Nonnull errors)
-        {
-             if (successfulResponse) {
-                 @synchronized (self) {
-                     [strongSelf->cache setObject:successfulResponse.data forKey:key];
-                     [strongSelf->pendingResponseCache removeObjectForKey:key];
-                 }
-                 [response sendNext:successfulResponse];
-                 [response sendCompleted];
-             } else {
-                 NSError *err =
-                 [NSError errorWithDomain:OCSPCacheErrorDomain
-                                     code:OCSPCacheErrorCodeNoSuccessfulResponse
-                                 userInfo:@{NSLocalizedDescriptionKey:
-                                            @"Failed to get a succesful response"}];
-                 [strongSelf logError:err];
-                 [response sendError:err];
-             }
-
-             // Log Errors
-
-             dispatch_async(strongSelf->logQueue, ^{
-                 for (OCSPResponse *r in failedResponses) {
+        [[OCSPService getOCSPData:urls onQueue:strongSelf->workQueue]
+         subscribeNext:^(NSObject * _Nullable x) {
+             // OCSPService emits NSError and OCSPResponse
+             // - Each error encountered is emitted
+             // - Each OCSP response obtained is emitted
+             // - If no successful response can be retrieved, an error is returned
+             if ([x isKindOfClass:[NSError class]]) {
+                 // Network error from OCSPService
+                 NSError *e = (NSError*)x;
+                 [self log:[NSString stringWithFormat:@"%@", e]];
+             } else if ([x isKindOfClass:[OCSPResponse class]]) {
+                 // OCSP response from OCSPService
+                 // Still need to check if it was successful
+                 OCSPResponse *r = (OCSPResponse*)x;
+                 if (r.success) {
+                     // Successful response, OCSPServer will complete after emitting this
+                     @synchronized (self) {
+                         // Add response to the cache and remove pending response
+                         [strongSelf->cache setObject:r.data forKey:key];
+                         [strongSelf->pendingResponseCache removeObjectForKey:key];
+                     }
+                     [response sendNext:r];
+                     [response sendCompleted];
+                 } else {
                      [self log:[NSString stringWithFormat:@"Got invalid OCSP response with code: "
                                                            "%d", [r status]]];
                  }
-                 for (NSError *e in errors) {
-                     [self log:[NSString stringWithFormat:@"%@", e]];
-                 }
-             });
-        }];
+             } else {
+                 // Should never happen
+                 [response sendError:[OCSPCache unknownObjectError:x]];
+             }
+         } error:^(NSError * _Nullable error) {
+             NSError *err =
+             [NSError errorWithDomain:OCSPCacheErrorDomain
+                                 code:OCSPCacheErrorCodeNoSuccessfulResponse
+                             userInfo:@{NSLocalizedDescriptionKey:
+                                        @"Failed to get a succesful response"}];
+             [response sendError:err];
+         } completed:^{
+             [self log:@"OCSPService completed"];
+         }];
 
         // Wait for response with timeout
 
@@ -358,16 +364,7 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
                 return [RACSignal return:x];
             }
 
-            NSString *localizedDescription =
-            [NSString stringWithFormat:@"Unexpected response of class %@",
-                                       NSStringFromClass([x class])];
-
-            NSError *e =
-            [NSError errorWithDomain:OCSPCacheErrorDomain
-                             code:OCSPCacheErrorCodeUnknown
-                         userInfo:@{NSLocalizedDescriptionKey:localizedDescription}];
-
-            return [RACSignal error:e];
+            return [RACSignal error:[OCSPCache unknownObjectError:x]];
         }] subscribeNext:^(id _Nullable x) {
             [self log:@"Service returned response"];
             dispatch_async(strongSelf->callbackQueue, ^{
@@ -383,7 +380,8 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
                                                                      cached:FALSE]);
              });
         } completed:^{
-            [self log:@"Service completed"];
+            // Should never happen
+            [self log:@"Response completed"];
         }];
     });
 }
@@ -446,7 +444,7 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
     return valueEvicted;
 }
 
-#pragma mark - Helpers
+#pragma mark - Certificate hashing
 
 // TODO: there could be a more concise key
 + (NSString*)sha256Base64Key:(SecCertificateRef)secCertRef {
@@ -457,6 +455,8 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
 
     return [macOut base64EncodedStringWithOptions:0];
 }
+
+#pragma mark - Logging
 
 - (void)logError:(NSError*)error {
     [self log:[NSString stringWithFormat:@"%@", error]];
@@ -474,6 +474,21 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
             self->logger(log);
         }
     });
+}
+
+#pragma mark - Errors
+
++ (NSError*)unknownObjectError:(NSObject*)x {
+    NSString *localizedDescription =
+    [NSString stringWithFormat:@"Unexpected response of class %@",
+     NSStringFromClass([x class])];
+
+    NSError *e =
+    [NSError errorWithDomain:OCSPCacheErrorDomain
+                        code:OCSPCacheErrorCodeUnknown
+                    userInfo:@{NSLocalizedDescriptionKey:localizedDescription}];
+
+    return e;
 }
 
 @end

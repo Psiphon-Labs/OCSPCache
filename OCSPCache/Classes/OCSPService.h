@@ -52,26 +52,31 @@ typedef NS_ERROR_ENUM(OCSPServiceErrorDomain, OCSPServiceErrorCode) {
      * The network request was successful, but the response data
      * could not be deserialized successfully into an OCSP Response.
      */
-    OCSPServiceErrorCodeInvalidResponseData
+    OCSPServiceErrorCodeInvalidResponseData,
+
+    /*!
+     * No successful OCSP response could be obtained.
+     */
+    OCSPServiceErrorCodeNoSuccessfulResponse
 };
 
 @interface OCSPService : NSObject
 
 /*!
- Returns responses up to the first success.
+ Cold terminating signal which completes when a successful OCSP response is retrieved. If no successful response can be retrieved, an
+ error is returned.
+
+ Emits either OCSPResponse or NSError. Each error and unsuccessful response encountered are emitted, but they do not cause signal
+ termination.
+
+ OCSP URLs are attempted in order.
 
  @param ocspURLs OCSP URLs with base 64 encoded OCSP request data for HTTP GET request. See
  OCSPURL.h.
  @param dispatchQueue Dispatch queue which the network requests should be made on.
- @param completion Completion handler which is called when either a successful OCSP response is
- obtained or all of the OCSP URLs have been tried. Even when a successful response is returned,
- all errors and failed responses are returned for logging.
  */
-+ (void)getOCSPData:(NSArray<NSURL*>*)ocspURLs
-            onQueue:(dispatch_queue_t)dispatchQueue
-     withCompletion:(void (^__nonnull)(OCSPResponse *successfulResponse,
-                                       NSArray<OCSPResponse*>*failedResponses,
-                                       NSArray<NSError*>*errors))completion;
++ (RACSignal<NSObject*>*)getOCSPData:(NSArray<NSURL*>*)ocspURLs
+                             onQueue:(dispatch_queue_t)dispatchQueue;
 
 @end
 

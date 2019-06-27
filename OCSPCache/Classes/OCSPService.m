@@ -20,74 +20,74 @@
 #import "OCSPService.h"
 #import <openssl/ocsp.h>
 #import "OCSPResponse.h"
+#import "RACReplaySubject.h"
 
 NSErrorDomain _Nonnull const OCSPServiceErrorDomain = @"OCSPServiceErrorDomain";
 
 @implementation OCSPService
 
 // See comment in header
-+ (void)getOCSPData:(NSArray<NSURL*>*)ocspURLs
-            onQueue:(dispatch_queue_t)dispatchQueue
-     withCompletion:(void (^__nonnull)(OCSPResponse *successfulResponse,
-                                       NSArray<OCSPResponse*>*failedResponses,
-                                       NSArray<NSError*>*errors))completion
++ (RACSignal<NSObject*>*)getOCSPData:(NSArray<NSURL*>*)ocspURLs
+                            onQueue:(dispatch_queue_t)dispatchQueue
 {
-    if ([ocspURLs count] == 0) {
-        NSError *error =
-        [NSError errorWithDomain:OCSPServiceErrorDomain
-                            code:OCSPServiceErrorCodeNoURLs
-                        userInfo:@{NSLocalizedDescriptionKey:@"No URLs provided"}];
-        completion(nil, nil, @[error]);
-        return;
-    }
-
-    dispatch_async(dispatchQueue, ^{
-
-        OCSPResponse *successfulResponse;
-        NSMutableArray<OCSPResponse*>* failedResponses = [[NSMutableArray alloc] init];
-        NSMutableArray<NSError*>* errors = [[NSMutableArray alloc] init];
-
-        for (NSURL *ocspURL in ocspURLs) {
-            NSURLResponse *resp = nil;
-            NSError *e = nil;
-
-            NSURLRequest *ocspReq = [NSURLRequest requestWithURL:ocspURL];
-
-            NSData *data = [NSURLConnection sendSynchronousRequest:ocspReq
-                                                 returningResponse:&resp
-                                                             error:&e];
-            if (e != nil) {
+    return [RACSignal createSignal:^RACDisposable *(id<RACSubscriber>  _Nonnull subscriber) {
+        dispatch_async(dispatchQueue, ^{
+            if ([ocspURLs count] == 0) {
                 NSError *error =
                 [NSError errorWithDomain:OCSPServiceErrorDomain
-                                    code:OCSPServiceErrorCodeRequestFailed
-                                userInfo:@{NSLocalizedDescriptionKey:@"OCSP request failed",
-                                           NSUnderlyingErrorKey:e}];
-                [errors addObject:error];
-                continue;
+                                    code:OCSPServiceErrorCodeNoURLs
+                                userInfo:@{NSLocalizedDescriptionKey:@"No URLs provided"}];
+                [subscriber sendError:error];
+                return;
             }
 
-            OCSPResponse *r = [[OCSPResponse alloc] initWithData:data];
-            if (!r) {
-                // Invalid OCSP Response Data
-                NSError *error =
-                [NSError errorWithDomain:OCSPServiceErrorDomain
-                                    code:OCSPServiceErrorCodeInvalidResponseData
-                                userInfo:@{NSLocalizedDescriptionKey:@"Invalid response data"}];
-                [errors addObject:error];
-                continue;
+            for (NSURL *ocspURL in ocspURLs) {
+                NSURLResponse *resp = nil;
+                NSError *e = nil;
+
+                NSURLRequest *ocspReq = [NSURLRequest requestWithURL:ocspURL];
+
+                NSData *data = [NSURLConnection sendSynchronousRequest:ocspReq
+                                                     returningResponse:&resp
+                                                                 error:&e];
+                if (e != nil) {
+                    NSError *error =
+                    [NSError errorWithDomain:OCSPServiceErrorDomain
+                                        code:OCSPServiceErrorCodeRequestFailed
+                                    userInfo:@{NSLocalizedDescriptionKey:@"OCSP request failed",
+                                               NSUnderlyingErrorKey:e}];
+                    [subscriber sendNext:error];
+                    continue;
+                }
+
+                OCSPResponse *r = [[OCSPResponse alloc] initWithData:data];
+                if (!r) {
+                    // Invalid OCSP Response Data
+                    NSError *error =
+                    [NSError errorWithDomain:OCSPServiceErrorDomain
+                                        code:OCSPServiceErrorCodeInvalidResponseData
+                                    userInfo:@{NSLocalizedDescriptionKey:@"Invalid subscriber data"}];
+                    [subscriber sendNext:error];
+                    continue;
+                }
+
+                [subscriber sendNext:r];
+
+                if ([r status] == OCSP_RESPONSE_STATUS_SUCCESSFUL) {
+                    return;
+                }
             }
 
-            if ([r status] != OCSP_RESPONSE_STATUS_SUCCESSFUL) {
-                [failedResponses addObject:r];
-                continue;
-            }
+            // No successful response could be obtained
+            NSError *error =
+            [NSError errorWithDomain:OCSPServiceErrorDomain
+                                code:OCSPServiceErrorCodeNoSuccessfulResponse
+                            userInfo:@{NSLocalizedDescriptionKey:@"No successful subscriber"}];
+            [subscriber sendError:error];
+        });
 
-            successfulResponse = r;
-            break;
-        }
-
-        completion(successfulResponse, failedResponses, errors);
-    });
+        return nil;
+    }];
 }
 
 @end
