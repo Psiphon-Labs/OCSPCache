@@ -28,8 +28,9 @@ typedef void (^AuthCompletion)(NSURLSessionAuthChallengeDisposition, NSURLCreden
  * OCSPAuthURLSessionDelegate implements URLSession:task:didReceiveChallenge:completionHandler:
  * of the NSURLSessionDelegate protocol.
  *
- * The main motivation of OCSPAuthURLSessionDelegate is to ensure that OCSP requests are not
- * sent in plaintext outside of the tunnel.
+ * The main motivation of OCSPAuthURLSessionDelegate is to ensure that OCSP requests are not sent in
+ * plaintext by the system when the desire is to proxy all network traffic. Plaintext OCSP requests
+ * are problematic because they leak the identity of the certificate being verified.
  *
  * If the policy object for checking the revocation of certificates is created with
  * SecPolicyCreateRevocation(kSecRevocationOCSPMethod | ...), and network access is allowed
@@ -39,7 +40,7 @@ typedef void (^AuthCompletion)(NSURLSessionAuthChallengeDisposition, NSURLCreden
  *
  * The solution is to inspect each X.509 certificate for the Online Certificate Status Protocol
  * (1.3.6.1.5.5.7.48.1) Authority Information Access Method, which contains the locations (URLs) of
- * the OCSP servers; then OCSP requests are then made to these servers through the local HTTP proxy.
+ * the OCSP servers; then OCSP requests can be made to these servers through local proxies.
  *
  * Note: OCSPAuthURLSessionDelegate only checks revocation status with OCSP.
  *

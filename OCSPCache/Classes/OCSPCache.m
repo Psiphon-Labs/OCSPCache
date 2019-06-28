@@ -315,8 +315,10 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
         }
 
         // Check if the URLs need to be modified
+
+        NSMutableArray<NSURL*>* newURLs = [[NSMutableArray alloc] initWithArray:urls];
+
         if (modifyOCSPURL) {
-            NSMutableArray<NSURL*>* newURLs = [[NSMutableArray alloc] initWithArray:urls];
             for (int i = 0; i < [urls count]; i++) {
                 NSURL *oldURL = [urls objectAtIndex:i];
                 NSURL *newURL = modifyOCSPURL(oldURL);
@@ -328,7 +330,7 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
 
         // Make OCSP requests
 
-        [[OCSPRequestService getSuccessfulOCSPResponse:urls
+        [[OCSPRequestService getSuccessfulOCSPResponse:newURLs
                                        ocspRequestData:ocspReqData
                                          sessionConfig:sessionConfig
                                                  queue:strongSelf->workQueue]
