@@ -4,7 +4,7 @@
   "summary": "OCSPCache is used for making OCSP requests and caching OCSP responses.",
   "homepage": "https://psiphon3.com",
   "license": {
-    "type": "GPL"
+    "type": "GNU General Public License v3.0"
   },
   "platforms": {
     "ios": "8.0"

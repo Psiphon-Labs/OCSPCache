@@ -20,8 +20,9 @@
 @import XCTest;
 
 #import <openssl/ocsp.h>
+#import "OCSPAuthURLSessionDelegate.h"
 #import "OCSPCache.h"
-#import "OCSPURL.h"
+#import "OCSPCert.h"
 #import "OCSPError.h"
 
 @interface Tests : XCTestCase
@@ -50,6 +51,64 @@
  * NOTE: OCSP Server must be running for `testDemoCACertificates` to pass, see README.md
  * NOTE: To clear the OCSP cache of the simulator use `Hardware->Erase All Content and Settings...`
  */
+
+#pragma mark - Network request with authentication challenge
+
+// Network request with an authentication challenge to exercise OCSPAuthURLSessionDelegate
+- (void)testNetworkRequestWithAuthenticationChallenge {
+
+    void (^logger)(NSString * _Nonnull logLine) =
+    ^(NSString * _Nonnull logLine) {
+        NSLog(@"[OCSPAuthURLSessionDelegate] %@", logLine);
+    };
+
+    NSURL* (^modifyOCSPURL)(NSURL *url) =
+    ^NSURL*(NSURL *url) {
+        NSLog(@"[OCSPAuthURLSessionDelegate] Making OCSP request to %@", url);
+        return nil;
+    };
+
+    OCSPCache *ocspCache = [[OCSPCache alloc] initWithLogger:logger];
+
+    OCSPAuthURLSessionDelegate *authURLSessionDelegate =
+    [[OCSPAuthURLSessionDelegate alloc] initWithLogger:logger
+                                             ocspCache:ocspCache
+                                         modifyOCSPURL:modifyOCSPURL
+                                         sessionConfig:nil];
+
+    NSURLSessionConfiguration *config = [NSURLSessionConfiguration ephemeralSessionConfiguration];
+
+    NSURLSession *session =
+    [NSURLSession sessionWithConfiguration:config
+                                  delegate:authURLSessionDelegate
+                             delegateQueue:NSOperationQueue.currentQueue];
+
+    XCTestExpectation *expectResult =
+    [self expectationWithDescription:@"Expected result from network request"];
+
+    NSURLSessionDataTask *dataTask =
+    [session dataTaskWithURL:[NSURL URLWithString:@"https://github.com/robots.txt"]
+           completionHandler:^(NSData * _Nullable data,
+                               NSURLResponse * _Nullable response,
+                               NSError * _Nullable error) {
+
+               XCTAssert(error == nil);
+               XCTAssert(response != nil);
+
+               [expectResult fulfill];
+           }
+     ];
+
+    [dataTask resume];
+
+    [self waitForExpectationsWithTimeout:60 handler:^(NSError * _Nullable error) {
+        if (error != nil) {
+            XCTFail(@"Timed out waiting for expectations: %@", error.localizedDescription);
+        }
+    }];
+}
+
+#pragma mark - Google Certificates
 
 // Test OCSPCache with Google Certificate
 - (void)testGoogleCertificates
@@ -81,6 +140,8 @@
 
     [self ocspCacheTestWithCert:cert andIssuer:issuer];
 }
+
+#pragma mark - Cache lookup with trust
 
 // Test OCSP Cache with trust object lookup
 - (void)testCacheLookupWithTrust
@@ -117,6 +178,7 @@
     [ocspCache lookup:trust
            andTimeout:10
         modifyOCSPURL:nil
+        sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
            completion:^(OCSPCacheLookupResult * _Nonnull result) {
         [self checkResultAndEvaluate:trust
                                 cert:cert
@@ -134,6 +196,8 @@
         }
     }];
 }
+
+#pragma mark - Demo CA
 
 // Test OCSP Cache with Demo CA Certificate using local OCSP Server
 - (void)testDemoCAWithGoodCertificate
@@ -158,6 +222,8 @@
 
     [self ocspCacheTestWithCert:cert andIssuer:issuer];
 }
+
+#pragma mark - Cache race
 
 // Test OCSP Cache with Demo CA Certificate using local OCSP Server
 // Do many lookups in parallel and ensure that all the results are
@@ -200,6 +266,7 @@
                withIssuer:issuer
                andTimeout:10
             modifyOCSPURL:nil
+            sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
                completion:
          ^(OCSPCacheLookupResult *result) {
              XCTAssert(result != nil);
@@ -222,6 +289,8 @@
         }
     }];
 }
+
+#pragma mark - No OCSP URLs
 
 // Certificate with no OCSP URLs should return an error
 - (void)testDemoCAWithCertificateWithNoOCSPURLs {
@@ -258,6 +327,7 @@
            withIssuer:issuer
            andTimeout:defaultTimeout
         modifyOCSPURL:nil
+        sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
            completion:
      ^(OCSPCacheLookupResult *r) {
          XCTAssert(r.response == nil);
@@ -266,8 +336,8 @@
          XCTAssert(r.err.code == OCSPCacheErrorConstructingOCSPRequests);
          NSError *underlyingError = [r.err.userInfo objectForKey:NSUnderlyingErrorKey];
          XCTAssert(underlyingError != nil);
-         XCTAssert(underlyingError.domain == OCSPErrorDomain);
-         XCTAssert(underlyingError.code == OCSPErrorCodeNoOCSPURLs);
+         XCTAssert(underlyingError.domain == OCSPCertErrorDomain);
+         XCTAssert(underlyingError.code == OCSPCertErrorCodeNoOCSPURLs);
          XCTAssert(r.cached == FALSE);
 
          [expectResult fulfill];
@@ -280,10 +350,12 @@
     }];
 }
 
+# pragma mark - Bad OCSP URLs
+
 // Test OCSP Cache with Demo CA Certificate with bad OCSP URLs using local OCSP Server
 - (void)testDemoCAWithCertificateWithBadOCSPURLs
 {
-    NSTimeInterval defaultTimeout = 15;
+    NSTimeInterval defaultTimeout = 5;
 
     Error *e;
 
@@ -317,6 +389,7 @@
            withIssuer:issuer
            andTimeout:defaultTimeout
         modifyOCSPURL:nil
+        sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
            completion:
      ^(OCSPCacheLookupResult *r) {
          XCTAssert(r.response == nil);
@@ -466,7 +539,8 @@
        withIssuer:issuerRef
        andTimeout:timeout
      modifyOCSPURL:nil
-       completion:
+     sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
+        completion:
      ^(OCSPCacheLookupResult * _Nonnull result) {
 
          [self checkResultAndEvaluate:trust

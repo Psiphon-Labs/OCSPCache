@@ -20,8 +20,8 @@
 #import "OCSPCache.h"
 #import <CommonCrypto/CommonDigest.h>
 #import "OCSPTrustToLeafAndIssuer.h"
-#import "OCSPService.h"
-#import "OCSPURL.h"
+#import "OCSPRequestService.h"
+#import "OCSPCert.h"
 #import "RACScheduler.h"
 #import "RACReplaySubject.h"
 #import "RACSignal+Operations.h"
@@ -127,6 +127,7 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
 - (void)lookup:(SecTrustRef)secTrustRef
     andTimeout:(NSTimeInterval)timeout
  modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
+ sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig
     completion:(void (^)(OCSPCacheLookupResult *result))completion {
 
     NSError *e;
@@ -154,14 +155,16 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
       withIssuer:issuer
       andTimeout:timeout
    modifyOCSPURL:modifyOCSPURL
+   sessionConfig:sessionConfig
       completion:completion];
 }
 
 /// See comment in header
 - (OCSPCacheLookupResult*)lookup:(SecTrustRef)secTrustRef
                       andTimeout:(NSTimeInterval)timeout
-                   modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL {
-
+                   modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
+                   sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig
+{
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
 
     __block OCSPCacheLookupResult* r;
@@ -169,6 +172,7 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
     [self lookup:secTrustRef
       andTimeout:timeout
    modifyOCSPURL:modifyOCSPURL
+   sessionConfig:sessionConfig
       completion:^(OCSPCacheLookupResult * _Nonnull result) {
           r = result;
         dispatch_semaphore_signal(sem);
@@ -185,6 +189,7 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
     withIssuer:(SecCertificateRef)issuerRef
     andTimeout:(NSTimeInterval)timeout
  modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
+ sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig
     completion:(void (^)(OCSPCacheLookupResult *result))completion {
 
     __weak OCSPCache *weakSelf = self;
@@ -260,9 +265,8 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
         // will return an error if there are 0 OCSP URLs in the certificate, so we do not
         // need to double check.
         NSError *errorGettingOCSPURLs;
-        NSArray<NSURL*>* urls = [OCSPURL ocspURLsFromSecCertRef:secCertRef
-                                              withIssuerCertRef:issuerRef
-                                                          error:&errorGettingOCSPURLs];
+        NSArray<NSURL*>* urls = [OCSPCert ocspURLsFromSecCertRef:secCertRef
+                                                           error:&errorGettingOCSPURLs];
         if (errorGettingOCSPURLs != nil) {
             NSError *err =
             [NSError errorWithDomain:OCSPCacheErrorDomain
@@ -283,9 +287,38 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
             return;
         }
 
+        // Get data required for OCSP request with the POST method
+
+        NSError *errorGettingOCSPRequestData;
+        NSData *ocspReqData = [OCSPCert ocspDataForPostRequestFromSecCertRef:secCertRef
+                                                           withIssuerCertRef:issuerRef
+                                                                       error:&errorGettingOCSPURLs];
+
+        if (errorGettingOCSPRequestData != nil) {
+            NSError *err =
+            [NSError errorWithDomain:OCSPCacheErrorDomain
+                                code:OCSPCacheErrorConstructingOCSPRequests
+                            userInfo:@{NSLocalizedDescriptionKey:@"Error constructing OCSP "
+                                       "requests",
+                                       NSUnderlyingErrorKey:errorGettingOCSPURLs}];
+            [self logError:err];
+            @synchronized (self) {
+                [self->pendingResponseCache removeObjectForKey:key];
+            }
+            [response sendError:err];
+            dispatch_async(strongSelf->callbackQueue, ^{
+                completion([OCSPCacheLookupResult lookupResultWithResponse:nil
+                                                                     error:err
+                                                                    cached:FALSE]);
+            });
+            return;
+        }
+
         // Check if the URLs need to be modified
+
+        NSMutableArray<NSURL*>* newURLs = [[NSMutableArray alloc] initWithArray:urls];
+
         if (modifyOCSPURL) {
-            NSMutableArray<NSURL*>* newURLs = [[NSMutableArray alloc] initWithArray:urls];
             for (int i = 0; i < [urls count]; i++) {
                 NSURL *oldURL = [urls objectAtIndex:i];
                 NSURL *newURL = modifyOCSPURL(oldURL);
@@ -297,41 +330,50 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
 
         // Make OCSP requests
 
-        [OCSPService getOCSPData:urls
-                     onQueue:strongSelf->workQueue
-                  withCompletion:^(OCSPResponse * _Nonnull successfulResponse,
-                                   NSArray<OCSPResponse *> * _Nonnull failedResponses,
-                                   NSArray<NSError *> * _Nonnull errors)
-        {
-             if (successfulResponse) {
-                 @synchronized (self) {
-                     [strongSelf->cache setObject:successfulResponse.data forKey:key];
-                     [strongSelf->pendingResponseCache removeObjectForKey:key];
-                 }
-                 [response sendNext:successfulResponse];
-                 [response sendCompleted];
-             } else {
-                 NSError *err =
-                 [NSError errorWithDomain:OCSPCacheErrorDomain
-                                     code:OCSPCacheErrorCodeNoSuccessfulResponse
-                                 userInfo:@{NSLocalizedDescriptionKey:
-                                            @"Failed to get a succesful response"}];
-                 [strongSelf logError:err];
-                 [response sendError:err];
-             }
-
-             // Log Errors
-
-             dispatch_async(strongSelf->logQueue, ^{
-                 for (OCSPResponse *r in failedResponses) {
+        [[OCSPRequestService getSuccessfulOCSPResponse:newURLs
+                                       ocspRequestData:ocspReqData
+                                         sessionConfig:sessionConfig
+                                                 queue:strongSelf->workQueue]
+         subscribeNext:^(NSObject * _Nullable x) {
+             // OCSPService emits NSError and OCSPResponse
+             // - Each error encountered is emitted
+             // - Each OCSP response obtained is emitted
+             // - If no successful response can be retrieved, an error is returned
+             if ([x isKindOfClass:[NSError class]]) {
+                 // Network error from OCSPService
+                 NSError *e = (NSError*)x;
+                 [self log:[NSString stringWithFormat:@"%@", e]];
+             } else if ([x isKindOfClass:[OCSPResponse class]]) {
+                 // OCSP response from OCSPService
+                 // Still need to check if it was successful
+                 OCSPResponse *r = (OCSPResponse*)x;
+                 if (r.success) {
+                     // Successful response, OCSPServer will complete after emitting this
+                     @synchronized (self) {
+                         // Add response to the cache and remove pending response
+                         [strongSelf->cache setObject:r.data forKey:key];
+                         [strongSelf->pendingResponseCache removeObjectForKey:key];
+                     }
+                     [response sendNext:r];
+                     [response sendCompleted];
+                 } else {
                      [self log:[NSString stringWithFormat:@"Got invalid OCSP response with code: "
                                                            "%d", [r status]]];
                  }
-                 for (NSError *e in errors) {
-                     [self log:[NSString stringWithFormat:@"%@", e]];
-                 }
-             });
-        }];
+             } else {
+                 // Should never happen
+                 [response sendError:[OCSPCache unknownObjectError:x]];
+             }
+         } error:^(NSError * _Nullable error) {
+             NSError *err =
+             [NSError errorWithDomain:OCSPCacheErrorDomain
+                                 code:OCSPCacheErrorCodeNoSuccessfulResponse
+                             userInfo:@{NSLocalizedDescriptionKey:
+                                        @"Failed to get a succesful response"}];
+             [response sendError:err];
+         } completed:^{
+             [self log:@"OCSPService completed"];
+         }];
 
         // Wait for response with timeout
 
@@ -358,16 +400,7 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
                 return [RACSignal return:x];
             }
 
-            NSString *localizedDescription =
-            [NSString stringWithFormat:@"Unexpected response of class %@",
-                                       NSStringFromClass([x class])];
-
-            NSError *e =
-            [NSError errorWithDomain:OCSPCacheErrorDomain
-                             code:OCSPCacheErrorCodeUnknown
-                         userInfo:@{NSLocalizedDescriptionKey:localizedDescription}];
-
-            return [RACSignal error:e];
+            return [RACSignal error:[OCSPCache unknownObjectError:x]];
         }] subscribeNext:^(id _Nullable x) {
             [self log:@"Service returned response"];
             dispatch_async(strongSelf->callbackQueue, ^{
@@ -383,7 +416,8 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
                                                                      cached:FALSE]);
              });
         } completed:^{
-            [self log:@"Service completed"];
+            // Should never happen
+            [self log:@"Response completed"];
         }];
     });
 }
@@ -392,8 +426,9 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
 - (OCSPCacheLookupResult*)lookup:(SecCertificateRef)secCertRef
                       withIssuer:(SecCertificateRef)issuerRef
                       andTimeout:(NSTimeInterval)timeout
-                   modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL {
-
+                   modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
+                   sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig
+{
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
 
     __block OCSPCacheLookupResult* r;
@@ -402,6 +437,8 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
       withIssuer:issuerRef
       andTimeout:timeout
    modifyOCSPURL:modifyOCSPURL
+   sessionConfig:[NSURLSessionConfiguration
+                  ephemeralSessionConfiguration]
       completion:^(OCSPCacheLookupResult * _Nonnull result) {
           r = result;
           dispatch_semaphore_signal(sem);
@@ -446,7 +483,7 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
     return valueEvicted;
 }
 
-#pragma mark - Helpers
+#pragma mark - Certificate hashing
 
 // TODO: there could be a more concise key
 + (NSString*)sha256Base64Key:(SecCertificateRef)secCertRef {
@@ -457,6 +494,8 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
 
     return [macOut base64EncodedStringWithOptions:0];
 }
+
+#pragma mark - Logging
 
 - (void)logError:(NSError*)error {
     [self log:[NSString stringWithFormat:@"%@", error]];
@@ -474,6 +513,21 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
             self->logger(log);
         }
     });
+}
+
+#pragma mark - Errors
+
++ (NSError*)unknownObjectError:(NSObject*)x {
+    NSString *localizedDescription =
+    [NSString stringWithFormat:@"Unexpected response of class %@",
+     NSStringFromClass([x class])];
+
+    NSError *e =
+    [NSError errorWithDomain:OCSPCacheErrorDomain
+                        code:OCSPCacheErrorCodeUnknown
+                    userInfo:@{NSLocalizedDescriptionKey:localizedDescription}];
+
+    return e;
 }
 
 @end

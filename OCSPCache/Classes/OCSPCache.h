@@ -145,18 +145,22 @@ typedef NS_ERROR_ENUM(OCSPCacheErrorDomain, OCSPCacheErrorCode) {
  @param modifyOCSPURL Block which updates each OCSP URL. This is an opportunity for the caller to:
  update the URL to point through a local proxy, whitelist the URL if needed, etc. If the provided
  block returns nil, the original URL is used.
+ @param sessionConfig Session configuration with which to perform OCSP requests. This is an opportunity for the caller to
+ specify a proxy to be used by the OCSP requests. If nil, `defaultSessionConfiguration` is used.
  @param completion Completion handler which is called when the lookup completes. If result.err is
  set then the other values should be ignored.
  */
 - (void)lookup:(SecTrustRef)secTrustRef
     andTimeout:(NSTimeInterval)timeout
  modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
+ sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig
     completion:(void (^)(OCSPCacheLookupResult *result))completion;
 
 /// Blocking lookup
 - (OCSPCacheLookupResult*)lookup:(SecTrustRef)secTrustRef
                       andTimeout:(NSTimeInterval)timeout
-                   modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL;
+                   modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
+                   sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig;
 
 /*!
  Obtain an OCSP response for the provided certificate.
@@ -176,6 +180,8 @@ typedef NS_ERROR_ENUM(OCSPCacheErrorDomain, OCSPCacheErrorCode) {
  @param modifyOCSPURL Block which updates each OCSP URL. This is an opportunity for the caller to:
  update the URL to point through a local proxy, whitelist the URL if needed, etc. If the provided
  block returns nil, the original URL is used.
+ @param sessionConfig Session configuration with which to perform OCSP requests. This is an opportunity for the caller to
+ specify a proxy to be used by the OCSP requests. If nil, `defaultSessionConfiguration` is used.
  @param completion Completion handler which is called when the lookup completes. If result.err is
  set then the other values should be ignored.
  */
@@ -183,13 +189,15 @@ typedef NS_ERROR_ENUM(OCSPCacheErrorDomain, OCSPCacheErrorCode) {
     withIssuer:(SecCertificateRef)issuerRef
     andTimeout:(NSTimeInterval)timeout
  modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
+ sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig
     completion:(void (^)(OCSPCacheLookupResult *result))completion;
 
 /// Blocking lookup
 - (OCSPCacheLookupResult*)lookup:(SecCertificateRef)secCertRef
                       withIssuer:(SecCertificateRef)issuerRef
                       andTimeout:(NSTimeInterval)timeout
-                   modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL;
+                   modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
+                   sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig;
 
 /*!
  Set the cache value for a certificate.

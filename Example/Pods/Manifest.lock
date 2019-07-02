@@ -13,7 +13,7 @@ EXTERNAL SOURCES:
     :path: ../
 
 SPEC CHECKSUMS:
-  OCSPCache: 0521ff143a41475f0bd5a9da025a117207185dd1
+  OCSPCache: abb976c1ac1a9e7203d4ed906eb22f43b49faaac
   OpenSSL-Universal: ff04c2e6befc3f1247ae039e60c93f76345b3b5a
   ReactiveObjC: 011caa393aa0383245f2dcf9bf02e86b80b36040
 
