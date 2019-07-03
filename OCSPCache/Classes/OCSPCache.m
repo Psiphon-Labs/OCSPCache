@@ -437,8 +437,7 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
       withIssuer:issuerRef
       andTimeout:timeout
    modifyOCSPURL:modifyOCSPURL
-   sessionConfig:[NSURLSessionConfiguration
-                  ephemeralSessionConfiguration]
+   sessionConfig:sessionConfig
       completion:^(OCSPCacheLookupResult * _Nonnull result) {
           r = result;
           dispatch_semaphore_signal(sem);
