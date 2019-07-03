@@ -51,18 +51,19 @@ typedef void (^AuthCompletion)(NSURLSessionAuthChallengeDisposition, NSURLCreden
 @interface OCSPAuthURLSessionDelegate : NSObject <NSURLSessionDelegate, NSURLSessionTaskDelegate>
 
 /// Initialize OCSPAuthURLSessionDelegate.
-/// @param logger logger Logger for emitting diagnostic information. Logging should only be used for testing since it emits the URLs
-/// corresponding to the certificate being validated.
+/// @param logger logger Logger for emitting diagnostic information. Logging should only be used for
+/// testing since it emits the URLs corresponding to the certificate being validated.
 /// @param ocspCache OCSPCache to use for making OCSP requests and caching OCSP responses.
 /// @param modifyOCSPURL Block which updates each OCSP URL. This is an opportunity for the caller to:
 /// update the URL to point through a local proxy, whitelist the URL if needed, etc. If the provided
 /// block returns nil, the original URL is used.
-/// @param sessionConfig Session configuration with which to perform OCSP requests. This is an opportunity for the caller to
-/// specify a proxy to be used by the OCSP requests. If nil, `defaultSessionConfiguration` is used.
+/// @param session Session with which to perform OCSP requests. This is an opportunity for the
+/// caller to specify a proxy to be used by the OCSP requests. If nil, a session with
+/// `ephemeralSessionConfiguration` is created and used.
 -  (instancetype)initWithLogger:(void (^)(NSString*))logger
                       ocspCache:(OCSPCache*)ocspCache
                   modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
-                  sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig;
+                        session:(NSURLSession*__nullable)session;
 
 /// Evaluate trust object performing certificate revocation checks in the following order:
 ///   1. OCSP staple
@@ -89,13 +90,13 @@ typedef void (^AuthCompletion)(NSURLSessionAuthChallengeDisposition, NSURLCreden
 /// of its issuer.
 /// @param modifyOCSPURLOverride Override the block specified when OCSPAuthURLSessionDelegate was initialized. This allows
 /// independent tasks to manage their own URL rewriting while sharing the same underlying OCSPAuthURLSessionDelegate.
-/// @param sessionConfigOverride Override the session configuration specified when OCSPAuthURLSessionDelegate was
-/// initialized. This allows independent tasks to mange the NSURLSessionConfiguration used per trust evaluation.
+/// @param sessionOverride Override the session specified when OCSPAuthURLSessionDelegate was
+/// initialized. This allows independent tasks to mange the NSURLSession used per trust evaluation.
 /// @param completionHandler Completion handler from the NSURLSessionDelegate or NSURLSessionTaskDelegate
 /// authentication challenge.
 - (BOOL)evaluateTrust:(SecTrustRef)trust
 modifyOCSPURLOverride:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURLOverride
-sessionConfigOverride:(NSURLSessionConfiguration*__nullable)sessionConfigOverride
+      sessionOverride:(NSURLSession*__nullable)sessionOverride
     completionHandler:(AuthCompletion)completionHandler;
 
 /// NSURLSessionDelegate implementation

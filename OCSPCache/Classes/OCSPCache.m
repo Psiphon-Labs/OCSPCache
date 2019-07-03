@@ -127,7 +127,7 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
 - (void)lookup:(SecTrustRef)secTrustRef
     andTimeout:(NSTimeInterval)timeout
  modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
- sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig
+       session:(NSURLSession*__nullable)session
     completion:(void (^)(OCSPCacheLookupResult *result))completion {
 
     NSError *e;
@@ -155,7 +155,7 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
       withIssuer:issuer
       andTimeout:timeout
    modifyOCSPURL:modifyOCSPURL
-   sessionConfig:sessionConfig
+         session:session
       completion:completion];
 }
 
@@ -163,7 +163,7 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
 - (OCSPCacheLookupResult*)lookup:(SecTrustRef)secTrustRef
                       andTimeout:(NSTimeInterval)timeout
                    modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
-                   sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig
+                         session:(NSURLSession*__nullable)session
 {
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
 
@@ -172,7 +172,7 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
     [self lookup:secTrustRef
       andTimeout:timeout
    modifyOCSPURL:modifyOCSPURL
-   sessionConfig:sessionConfig
+         session:session
       completion:^(OCSPCacheLookupResult * _Nonnull result) {
           r = result;
         dispatch_semaphore_signal(sem);
@@ -189,7 +189,7 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
     withIssuer:(SecCertificateRef)issuerRef
     andTimeout:(NSTimeInterval)timeout
  modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
- sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig
+       session:(NSURLSession*__nullable)session
     completion:(void (^)(OCSPCacheLookupResult *result))completion {
 
     __weak OCSPCache *weakSelf = self;
@@ -332,7 +332,7 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
 
         [[OCSPRequestService getSuccessfulOCSPResponse:newURLs
                                        ocspRequestData:ocspReqData
-                                         sessionConfig:sessionConfig
+                                               session:session
                                                  queue:strongSelf->workQueue]
          subscribeNext:^(NSObject * _Nullable x) {
              // OCSPService emits NSError and OCSPResponse
@@ -427,7 +427,7 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
                       withIssuer:(SecCertificateRef)issuerRef
                       andTimeout:(NSTimeInterval)timeout
                    modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
-                   sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig
+                         session:(NSURLSession*__nullable)session
 {
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
 
@@ -437,7 +437,7 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
       withIssuer:issuerRef
       andTimeout:timeout
    modifyOCSPURL:modifyOCSPURL
-   sessionConfig:sessionConfig
+         session:session
       completion:^(OCSPCacheLookupResult * _Nonnull result) {
           r = result;
           dispatch_semaphore_signal(sem);

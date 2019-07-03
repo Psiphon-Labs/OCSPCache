@@ -31,7 +31,7 @@ NSErrorDomain _Nonnull const OCSPRequestServiceErrorDomain = @"OCSPRequestServic
 // See comment in header
 + (RACSignal<NSObject*>*)getSuccessfulOCSPResponse:(NSArray<NSURL*>*)ocspURLs
                                    ocspRequestData:(NSData*)ocspRequestData
-                                     sessionConfig:(NSURLSessionConfiguration * _Nullable)sessionConfig
+                                           session:(NSURLSession *_Nullable)session
                                              queue:(dispatch_queue_t)queue
 {
     assert([ocspURLs count] != 0);
@@ -44,7 +44,7 @@ NSErrorDomain _Nonnull const OCSPRequestServiceErrorDomain = @"OCSPRequestServic
          flattenMap:^__kindof RACSignal * _Nullable(NSURL *url) {
              return [OCSPRequestService ocspRequest:url
                                     ocspRequestData:ocspRequestData
-                                      sessionConfig:sessionConfig
+                                      session:session
                                               queue:queue];
          }]
          takeUntilBlock:^BOOL(id  _Nullable x) {
@@ -83,23 +83,22 @@ NSErrorDomain _Nonnull const OCSPRequestServiceErrorDomain = @"OCSPRequestServic
 /// See comment in header
 + (RACSignal<OCSPResponse*>*)ocspRequest:(NSURL*)ocspURL
                          ocspRequestData:(NSData*)OCSPRequestData
-                           sessionConfig:(NSURLSessionConfiguration*)sessionConfig
+                                 session:(NSURLSession*)session
                                    queue:(dispatch_queue_t)queue
 {
     return [RACSignal createSignal:^RACDisposable *(id<RACSubscriber>  _Nonnull subscriber) {
         NSError *e = nil;
-        NSURLSessionConfiguration *config;
 
-        if (sessionConfig) {
-            config = sessionConfig;
+        NSURLSession *sessionForRequest;
+
+        if (session) {
+            sessionForRequest = session;
         } else {
-            config = [NSURLSessionConfiguration defaultSessionConfiguration];
-        }
+            NSURLSessionConfiguration *config =
+            [NSURLSessionConfiguration ephemeralSessionConfiguration];
 
-        NSURLSession *session =
-        [NSURLSession sessionWithConfiguration:config
-                                      delegate:nil
-                                 delegateQueue:NSOperationQueue.currentQueue];
+            sessionForRequest = [NSURLSession sessionWithConfiguration:config];
+        }
 
         // Make an OCSP request with the POST method.
         // OCSP POST request format: https://tools.ietf.org/html/rfc2560#appendix-A.1.1
@@ -110,10 +109,10 @@ NSErrorDomain _Nonnull const OCSPRequestServiceErrorDomain = @"OCSPRequestServic
         [ocspReq setHTTPBody:OCSPRequestData];
 
         NSURLSessionDataTask *dataTask =
-        [session dataTaskWithRequest:ocspReq
-                   completionHandler:^(NSData * _Nullable data,
-                                       NSURLResponse * _Nullable response,
-                                       NSError * _Nullable error) {
+        [sessionForRequest dataTaskWithRequest:ocspReq
+                             completionHandler:^(NSData * _Nullable data,
+                                                 NSURLResponse * _Nullable response,
+                                                 NSError * _Nullable error) {
             if (e != nil) {
                 NSError *error =
                 [NSError errorWithDomain:OCSPRequestServiceErrorDomain

@@ -74,7 +74,7 @@
     [[OCSPAuthURLSessionDelegate alloc] initWithLogger:logger
                                              ocspCache:ocspCache
                                          modifyOCSPURL:modifyOCSPURL
-                                         sessionConfig:nil];
+                                               session:nil];
 
     NSURLSessionConfiguration *config = [NSURLSessionConfiguration ephemeralSessionConfiguration];
 
@@ -178,7 +178,7 @@
     [ocspCache lookup:trust
            andTimeout:10
         modifyOCSPURL:nil
-        sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
+              session:nil
            completion:^(OCSPCacheLookupResult * _Nonnull result) {
         [self checkResultAndEvaluate:trust
                                 cert:cert
@@ -266,7 +266,7 @@
                withIssuer:issuer
                andTimeout:10
             modifyOCSPURL:nil
-            sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
+                  session:nil
                completion:
          ^(OCSPCacheLookupResult *result) {
              XCTAssert(result != nil);
@@ -327,7 +327,7 @@
            withIssuer:issuer
            andTimeout:defaultTimeout
         modifyOCSPURL:nil
-        sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
+              session:nil
            completion:
      ^(OCSPCacheLookupResult *r) {
          XCTAssert(r.response == nil);
@@ -389,7 +389,7 @@
            withIssuer:issuer
            andTimeout:defaultTimeout
         modifyOCSPURL:nil
-        sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
+              session:nil
            completion:
      ^(OCSPCacheLookupResult *r) {
          XCTAssert(r.response == nil);
@@ -408,7 +408,7 @@
     }];
 }
 
-#pragma mark - Helpers
+#pragma mark - Helpers for certificate evaluations
 
 // Run a series of tests against the cache
 - (void)ocspCacheTestWithCert:(SecCertificateRef)certRef andIssuer:(SecCertificateRef)issuerRef
@@ -538,9 +538,9 @@
     [cache lookup:certRef
        withIssuer:issuerRef
        andTimeout:timeout
-     modifyOCSPURL:nil
-     sessionConfig:[NSURLSessionConfiguration ephemeralSessionConfiguration]
-        completion:
+    modifyOCSPURL:nil
+          session:nil
+       completion:
      ^(OCSPCacheLookupResult * _Nonnull result) {
 
          [self checkResultAndEvaluate:trust
@@ -629,6 +629,8 @@
 
     return trustEvaulateResult;
 }
+
+#pragma mark - Helpers for loading certificates
 
 // Load certificate and check that common name matches
 - (Error*)loadCertificate:(NSString*)filePath
