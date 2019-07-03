@@ -26,7 +26,7 @@
     void (^logger)(NSString*);
     NSURL* (^modifyOCSPURL)(NSURL *url);
     OCSPCache* ocspCache;
-    NSURLSessionConfiguration *sessionConfig;
+    NSURLSession *session;
     void (^successfullyValidatedTrust)(SecTrustRef trust);
 }
 
@@ -47,17 +47,20 @@
 -  (instancetype)initWithLogger:(void (^)(NSString*))logger
                       ocspCache:(nonnull OCSPCache *)ocspCache
                   modifyOCSPURL:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCSPURL
-                  sessionConfig:(NSURLSessionConfiguration * _Nullable)sessionConfig {
+                        session:(NSURLSession * _Nullable)session {
     self = [super init];
 
     if (self) {
         self->logger = logger;
         self->ocspCache = ocspCache;
         self->modifyOCSPURL = modifyOCSPURL;
-        if (sessionConfig) {
-            self->sessionConfig = sessionConfig;
+        if (session) {
+            self->session = session;
         } else {
-            self->sessionConfig = [NSURLSessionConfiguration defaultSessionConfiguration];
+            NSURLSessionConfiguration *config =
+            [NSURLSessionConfiguration ephemeralSessionConfiguration];
+
+            self->session = [NSURLSession sessionWithConfiguration:config];
         }
     }
 
@@ -127,14 +130,14 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
 
     return [self evaluateTrust:trust
          modifyOCSPURLOverride:nil
-         sessionConfigOverride:nil
+               sessionOverride:nil
              completionHandler:completionHandler];
 }
 
 /// See comment in header
 - (BOOL)evaluateTrust:(SecTrustRef)trust
 modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCSPURLOverride
-sessionConfigOverride:(NSURLSessionConfiguration*)sessionConfigOverride
+      sessionOverride:(NSURLSession*)sessionOverride
     completionHandler:(AuthCompletion)completionHandler {
 
     NSURL* (^modifyOCSPURL)(NSURL *url);
@@ -145,11 +148,11 @@ sessionConfigOverride:(NSURLSessionConfiguration*)sessionConfigOverride
         modifyOCSPURL = self->modifyOCSPURL;
     }
 
-    NSURLSessionConfiguration *config;
-    if (sessionConfigOverride) {
-        config = sessionConfigOverride;
+    NSURLSession *session;
+    if (sessionOverride) {
+        session = sessionOverride;
     } else {
-        config = self->sessionConfig;
+        session = self->session;
     }
 
     BOOL completed;
@@ -174,7 +177,7 @@ sessionConfigOverride:(NSURLSessionConfiguration*)sessionConfigOverride
     OCSPCacheLookupResult *result = [self->ocspCache lookup:trust
                                                  andTimeout:0
                                               modifyOCSPURL:modifyOCSPURL
-                                              sessionConfig:config];
+                                                    session:session];
 
     BOOL evictedResponse;
 
@@ -196,10 +199,9 @@ sessionConfigOverride:(NSURLSessionConfiguration*)sessionConfigOverride
         // The response may have been evicted if it was expired or invalid. Retry once.
 
         OCSPCacheLookupResult *result = [self->ocspCache lookup:trust
-                                                    andTimeout:0
-                                                 modifyOCSPURL:modifyOCSPURL
-                                                sessionConfig:[NSURLSessionConfiguration
-                                                               ephemeralSessionConfiguration]];
+                                                     andTimeout:0
+                                                  modifyOCSPURL:modifyOCSPURL
+                                                        session:session];
 
         [self evaluateOCSPCacheResult:result
                       evictedResponse:&evictedResponse

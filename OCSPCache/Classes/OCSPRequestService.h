@@ -67,13 +67,14 @@ typedef NS_ERROR_ENUM(OCSPRequestServiceErrorDomain, OCSPRequestServiceErrorCode
  OCSP URLs are attempted in order.
 
  @param ocspURLs OCSP server URLs.
- @param sessionConfig Session configuration with which to perform OCSP requests. This is an opportunity for the caller to
- specify a proxy to be used by the OCSP requests. If nil, `defaultSessionConfiguration` is used.
+ @param session Session with which to perform OCSP requests. This is an opportunity for the caller
+ to specify a proxy to be used by the OCSP requests. If nil, a session with
+ `ephemeralSessionConfiguration` is created and used.
  @param queue Dispatch queue which the network requests should be made on.
  */
 + (RACSignal<NSObject*>*)getSuccessfulOCSPResponse:(NSArray<NSURL*>*)ocspURLs
                                    ocspRequestData:(NSData*)OCSPRequestData
-                                     sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig
+                                           session:(NSURLSession*__nullable)session
                                              queue:(dispatch_queue_t)queue;
 
 /*!
@@ -84,13 +85,14 @@ typedef NS_ERROR_ENUM(OCSPRequestServiceErrorDomain, OCSPRequestServiceErrorCode
  See: https://tools.ietf.org/html/rfc2560#appendix-A.1.1
 
  @param ocspURL OCSP server URL to make an OCSP request to.
- @param sessionConfig Session configuration with which to perform OCSP requests. This is an opportunity for the caller to
- specify a proxy to be used by the OCSP requests. If nil, `defaultSessionConfiguration` is used.
+ @param session Session with which to perform OCSP requests. This is an opportunity for the caller
+ to specify a proxy to be used by the OCSP requests. If nil, a session with
+ `ephemeralSessionConfiguration` is created and used.
  @param queue Dispatch queue which the network requests should be made on.
  */
 + (RACSignal<NSObject*>*)ocspRequest:(NSURL*)ocspURL
                      ocspRequestData:(NSData*)ocspRequestData
-                       sessionConfig:(NSURLSessionConfiguration*__nullable)sessionConfig
+                             session:(NSURLSession*__nullable)session
                                queue:(dispatch_queue_t)queue;
 
 @end
