@@ -183,7 +183,7 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
 
     [self evaluateOCSPCacheResult:result
                   evictedResponse:&evictedResponse
-                         trust:trust
+                            trust:trust
                         completed:&completed
                completedWithError:&completedWithError
                 completionHandler:completionHandler];
@@ -205,7 +205,7 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
 
         [self evaluateOCSPCacheResult:result
                       evictedResponse:&evictedResponse
-                             trust:trust
+                                trust:trust
                             completed:&completed
                    completedWithError:&completedWithError
                     completionHandler:completionHandler];
@@ -256,6 +256,8 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
         completedWithError:(BOOL*)completedWithError
          completionHandler:(AuthCompletion)completionHandler {
 
+    SecTrustSetPolicies(trust, policy);
+
     [self evaluateTrust:trust
               completed:completed
      completedWithError:completedWithError
@@ -272,7 +274,7 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
                                                     kSecRevocationRequirePositiveResponse |
                                                     kSecRevocationNetworkAccessDisabled);
     [self evaluateWithPolicy:policy
-                    trust:trust
+                       trust:trust
                    completed:completed
           completedWithError:completedWithError
            completionHandler:completionHandler];
@@ -283,7 +285,7 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
 /// Evaluate response from OCSP cache
 - (void)evaluateOCSPCacheResult:(OCSPCacheLookupResult*)result
                 evictedResponse:(BOOL*)evictedResponse
-                       trust:(SecTrustRef)trust
+                          trust:(SecTrustRef)trust
                       completed:(BOOL*)completed
              completedWithError:(BOOL*)completedWithError
               completionHandler:(AuthCompletion)completionHandler {
@@ -309,10 +311,15 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
         SecTrustResultType trustResultType;
         SecTrustEvaluate(trust, &trustResultType);
 
-        [self evaluateTrust:trust
-                  completed:completed
-         completedWithError:completedWithError
-          completionHandler:completionHandler];
+        SecPolicyRef policy = SecPolicyCreateRevocation(kSecRevocationOCSPMethod |
+                                                        kSecRevocationRequirePositiveResponse |
+                                                        kSecRevocationNetworkAccessDisabled);
+
+        [self evaluateWithPolicy:policy
+                           trust:trust
+                       completed:completed
+              completedWithError:completedWithError
+               completionHandler:completionHandler];
 
         if (!*completed || (*completed && *completedWithError)) {
             [self logWithFormat:@"Evaluate failed with OCSP response from cache"];
@@ -343,7 +350,7 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
                                                     kSecRevocationRequirePositiveResponse);
 
     [self evaluateWithPolicy:policy
-                    trust:trust
+                       trust:trust
                    completed:completed
           completedWithError:completedWithError
            completionHandler:completionHandler];
@@ -363,7 +370,7 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
     SecPolicyRef policy = SecPolicyCreateRevocation(kSecRevocationCRLMethod);
 
     [self evaluateWithPolicy:policy
-                    trust:trust
+                       trust:trust
                    completed:completed
           completedWithError:completedWithError
            completionHandler:completionHandler];
