@@ -395,7 +395,7 @@
          XCTAssert(r.response == nil);
          XCTAssert(r.err != nil);
          XCTAssert(r.err.domain == OCSPCacheErrorDomain);
-         XCTAssert(r.err.code == OCSPCacheErrorCodeLookupTimedOut);
+         XCTAssert(r.err.code == OCSPCacheErrorCodeNoSuccessfulResponse);
          XCTAssert(r.cached == FALSE);
 
          [expectResult fulfill];
