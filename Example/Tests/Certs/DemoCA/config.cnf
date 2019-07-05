@@ -176,7 +176,7 @@ authorityInfoAccess = OCSP;URI:http://127.0.0.1:8080
 
 [ bad_ocsp ]
 
-authorityInfoAccess = OCSP;URI:invalid,OCSP;URI:http://example.com:8080
+authorityInfoAccess = OCSP;URI:invalid_ocsp_uri_1,OCSP;URI:invalid_ocsp_uri_2
 
 [ usr_cert ]
 
