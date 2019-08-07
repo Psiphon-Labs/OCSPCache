@@ -21,6 +21,7 @@
 
 #import "OCSPCache.h"
 #import "OCSPURLEncode.h"
+#import "OCSPSecTrust.h"
 
 @implementation OCSPAuthURLSessionDelegate {
     void (^logger)(NSString*);
@@ -256,7 +257,7 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
         completedWithError:(BOOL*)completedWithError
          completionHandler:(AuthCompletion)completionHandler {
 
-    SecTrustSetPolicies(trust, policy);
+    OCSPSecTrustAddPolicy(trust, policy);
 
     [self evaluateTrust:trust
               completed:completed

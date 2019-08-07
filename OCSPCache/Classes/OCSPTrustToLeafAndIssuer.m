@@ -51,7 +51,7 @@ NSErrorDomain _Nonnull const OCSPTrustToLeafAndIssuerErrorDomain =
 }
 
 + (SecCertificateRef)certAtIndex:(SecTrustRef)trust withIndex:(int)index {
-    if (SecTrustGetCertificateCount(trust) < index) {
+    if (index >= SecTrustGetCertificateCount(trust)) {
         return nil;
     }
 

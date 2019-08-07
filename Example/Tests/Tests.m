@@ -24,6 +24,8 @@
 #import "OCSPCache.h"
 #import "OCSPCert.h"
 #import "OCSPError.h"
+#import "OCSPSecTrust.h"
+
 
 @interface Tests : XCTestCase
 
@@ -57,24 +59,8 @@
 // Network request with an authentication challenge to exercise OCSPAuthURLSessionDelegate
 - (void)testNetworkRequestWithAuthenticationChallenge {
 
-    void (^logger)(NSString * _Nonnull logLine) =
-    ^(NSString * _Nonnull logLine) {
-        NSLog(@"[OCSPAuthURLSessionDelegate] %@", logLine);
-    };
-
-    NSURL* (^modifyOCSPURL)(NSURL *url) =
-    ^NSURL*(NSURL *url) {
-        NSLog(@"[OCSPAuthURLSessionDelegate] Making OCSP request to %@", url);
-        return nil;
-    };
-
-    OCSPCache *ocspCache = [[OCSPCache alloc] initWithLogger:logger];
-
     OCSPAuthURLSessionDelegate *authURLSessionDelegate =
-    [[OCSPAuthURLSessionDelegate alloc] initWithLogger:logger
-                                             ocspCache:ocspCache
-                                         modifyOCSPURL:modifyOCSPURL
-                                               session:nil];
+    [self ocspAuthURLSessionDelegateWithLogging];
 
     NSURLSessionConfiguration *config = [NSURLSessionConfiguration ephemeralSessionConfiguration];
 
@@ -113,30 +99,9 @@
 // Test OCSPCache with Google Certificate
 - (void)testGoogleCertificates
 {
-    Error *e;
-    SecCertificateRef cert;
-    e = [self loadCertificate:@"Certs/Google/cert.der"
-           expectedCommonName:@"www.google.com"
-                      certRef:&cert];
-    if (e) {
-        XCTFail(@"%@", e);
-    }
+    SecCertificateRef cert = [self googleLeafCert];
 
-    SecCertificateRef issuer;
-    e = [self loadCertificate:@"Certs/Google/intermediate.der"
-           expectedCommonName:@"Google Internet Authority G3"
-                      certRef:&issuer];
-    if (e) {
-        XCTFail(@"%@", e);
-    }
-
-    SecCertificateRef root;
-    e = [self loadCertificate:@"Certs/Google/root.der"
-           expectedCommonName:@"www.google.com"
-                      certRef:&root];
-    if (e) {
-        XCTFail(@"%@", e);
-    }
+    SecCertificateRef issuer = [self googleIntermediateCert];
 
     [self ocspCacheTestWithCert:cert andIssuer:issuer];
 }
@@ -146,15 +111,7 @@
 // Test OCSP Cache with trust object lookup
 - (void)testCacheLookupWithTrust
 {
-    Error *e;
-
-    SecCertificateRef cert;
-    e = [self loadCertificate:@"Certs/DemoCA/local_ocsp_urls.der"
-           expectedCommonName:@"Local OCSP URLs"
-                      certRef:&cert];
-    if (e) {
-        XCTFail(@"%@", e);
-    }
+    SecCertificateRef cert = [self localOCSPURLsCert];
 
     NSArray *certArray = @[(__bridge id)cert];
 
@@ -168,9 +125,7 @@
         return;
     }
 
-    OCSPCache *ocspCache = [[OCSPCache alloc] initWithLogger:^(NSString * _Nonnull logLine) {
-        NSLog(@"[OCSPCache] %@", logLine);
-    }];
+    OCSPCache *ocspCache = [self ocspCacheWithLogging];
 
     XCTestExpectation *expectResult =
     [self expectationWithDescription:@"Expected result from cache"];
@@ -197,28 +152,69 @@
     }];
 }
 
+// Test OCSPAuthURLSessionDelegate retains trust policies
+//
+// Tests a previous bug where OCSPAuthURLSessionDelegate was
+// overriding the policies set on the trust when setting the
+// revocation policy.
+- (void)testCacheLookupWithTrustHostnameMismatch
+{
+    SecCertificateRef cert = [self localOCSPURLsCert];
+
+    NSArray *certArray = @[(__bridge id)cert];
+
+    SecPolicyRef policy = SecPolicyCreateSSL(YES, (__bridge CFStringRef) @"google.com");
+
+    SecTrustRef trust;
+    OSStatus status = SecTrustCreateWithCertificates((__bridge CFTypeRef)certArray,
+                                                     policy,
+                                                     &trust);
+    if (status != 0) {
+        XCTFail(@"Unexpected OSStatus %d. Check https://osstatus.com/.", status);
+        return;
+    }
+
+    OCSPAuthURLSessionDelegate *authURLSessionDelegate =
+    [self ocspAuthURLSessionDelegateWithLogging];
+
+    XCTestExpectation *expectResult =
+    [self expectationWithDescription:@"Expected result from cache"];
+
+    // TODO/NOTE: this evaluation fails multiple times because all the checks (OCSP, CRL, etc.)
+    //            are done even though this is an irrecoverable failure. This is because the
+    //            evaluation result is kSecTrustResultRecoverableTrustFailure and not
+    //            kSecTrustSettingsResultDeny. In the future it would be worth seeing if we can
+    //            inspect the error and determine if it is due to the SSLPolicy failing – then we
+    //            could return kSecTrustSettingsResultDeny ourselves.
+    [authURLSessionDelegate
+        evaluateTrust:trust
+        completionHandler:^(NSURLSessionAuthChallengeDisposition disposition,
+                            NSURLCredential * _Nullable credential) {
+            XCTAssert(credential == nil);
+            XCTAssert(disposition == NSURLSessionAuthChallengeRejectProtectionSpace);
+
+            OCSPSecTrustPrintPolicies(trust);
+            XCTAssert(OCSPSecTrustSSLPolicyPresent(trust, @"google.com"));
+
+            [expectResult fulfill];
+        }
+     ];
+
+    [self waitForExpectationsWithTimeout:60 handler:^(NSError * _Nullable error) {
+        if (error != nil) {
+            XCTFail(@"Timed out waiting for expectations: %@", error.localizedDescription);
+        }
+    }];
+}
+
 #pragma mark - Demo CA
 
 // Test OCSP Cache with Demo CA Certificate using local OCSP Server
 - (void)testDemoCAWithGoodCertificate
 {
-    Error *e;
+    SecCertificateRef cert = [self localOCSPURLsCert];
 
-    SecCertificateRef cert;
-    e = [self loadCertificate:@"Certs/DemoCA/local_ocsp_urls.der"
-           expectedCommonName:@"Local OCSP URLs"
-                      certRef:&cert];
-    if (e) {
-        XCTFail(@"%@", e);
-    }
-
-    SecCertificateRef issuer;
-    e = [self loadCertificate:@"Certs/DemoCA/root_CA.der"
-           expectedCommonName:@"Demo CA"
-                      certRef:&issuer];
-    if (e) {
-        XCTFail(@"%@", e);
-    }
+    SecCertificateRef issuer = [self rootCACert];
 
     [self ocspCacheTestWithCert:cert andIssuer:issuer];
 }
@@ -230,23 +226,9 @@
 // cached except the initial request.
 - (void)testDemoCAWithGoodCertificateCacheRace
 {
-    Error *e;
+    SecCertificateRef cert = [self localOCSPURLsCert];
 
-    SecCertificateRef cert;
-    e = [self loadCertificate:@"Certs/DemoCA/local_ocsp_urls.der"
-           expectedCommonName:@"Local OCSP URLs"
-                      certRef:&cert];
-    if (e) {
-        XCTFail(@"%@", e);
-    }
-
-    SecCertificateRef issuer;
-    e = [self loadCertificate:@"Certs/DemoCA/root_CA.der"
-           expectedCommonName:@"Demo CA"
-                      certRef:&issuer];
-    if (e) {
-        XCTFail(@"%@", e);
-    }
+    SecCertificateRef issuer = [self rootCACert];
 
     NSUInteger numTests = 1000;
 
@@ -255,9 +237,7 @@
 
     expectResult.expectedFulfillmentCount = numTests;
 
-    OCSPCache *ocspCache = [[OCSPCache alloc] initWithLogger:^(NSString * _Nonnull logLine) {
-        NSLog(@"[OCSPCache] %@", logLine);
-    }];
+    OCSPCache *ocspCache = [self ocspCacheWithLogging];
 
     __block int numNotCached = 0;
 
@@ -293,30 +273,15 @@
 #pragma mark - No OCSP URLs
 
 // Certificate with no OCSP URLs should return an error
-- (void)testDemoCAWithCertificateWithNoOCSPURLs {
+- (void)testDemoCAWithCertificateWithNoOCSPURLsCert
+{
     NSTimeInterval defaultTimeout = 10;
 
-    Error *e;
+    SecCertificateRef cert = [self noOCSPURLsCert];
 
-    SecCertificateRef cert;
-    e = [self loadCertificate:@"Certs/DemoCA/no_ocsp_urls.der"
-           expectedCommonName:@"No OCSP URLs"
-                      certRef:&cert];
-    if (e) {
-        XCTFail(@"%@", e);
-    }
+    SecCertificateRef issuer = [self rootCACert];
 
-    SecCertificateRef issuer;
-    e = [self loadCertificate:@"Certs/DemoCA/root_CA.der"
-           expectedCommonName:@"Demo CA"
-                      certRef:&issuer];
-    if (e) {
-        XCTFail(@"%@", e);
-    }
-
-    OCSPCache *ocspCache = [[OCSPCache alloc] initWithLogger:^(NSString * _Nonnull logLine) {
-        NSLog(@"[OCSPCache] %@", logLine);
-    }];
+    OCSPCache *ocspCache = [self ocspCacheWithLogging];
 
     // Expect the cache to return an error because there are no OCSP URLs in the certificate.
 
@@ -353,31 +318,15 @@
 # pragma mark - Bad OCSP URLs
 
 // Test OCSP Cache with Demo CA Certificate with bad OCSP URLs using local OCSP Server
-- (void)testDemoCAWithCertificateWithBadOCSPURLs
+- (void)testDemoCAWithCertificateWithBadOCSPURLsCert
 {
     NSTimeInterval defaultTimeout = 5;
 
-    Error *e;
+    SecCertificateRef cert = [self badOCSPURLsCert];
 
-    SecCertificateRef cert;
-    e = [self loadCertificate:@"Certs/DemoCA/bad_ocsp_urls.der"
-           expectedCommonName:@"Bad OCSP URLs"
-                      certRef:&cert];
-    if (e) {
-        XCTFail(@"%@", e);
-    }
+    SecCertificateRef issuer = [self rootCACert];
 
-    SecCertificateRef issuer;
-    e = [self loadCertificate:@"Certs/DemoCA/root_CA.der"
-           expectedCommonName:@"Demo CA"
-                      certRef:&issuer];
-    if (e) {
-        XCTFail(@"%@", e);
-    }
-
-    OCSPCache *ocspCache = [[OCSPCache alloc] initWithLogger:^(NSString * _Nonnull logLine) {
-        NSLog(@"[OCSPCache] %@", logLine);
-    }];
+    OCSPCache *ocspCache = [self ocspCacheWithLogging];
 
     // Expect the cache to return an error because no response can be retrieved from the invalid
     // OCSP URLs
@@ -430,9 +379,7 @@
         return;
     }
 
-    OCSPCache *ocspCache = [[OCSPCache alloc] initWithLogger:^(NSString * _Nonnull logLine) {
-        NSLog(@"[OCSPCache] %@", logLine);
-    }];
+    OCSPCache *ocspCache = [self ocspCacheWithLogging];
 
     /// Cache miss
 
@@ -630,7 +577,98 @@
     return trustEvaulateResult;
 }
 
+#pragma mark - OCSPCache initialization
+
+- (OCSPCache*)ocspCacheWithLogging {
+    OCSPCache *cache=
+    [[OCSPCache alloc] initWithLogger:^(NSString * _Nonnull logLine) {
+        NSLog(@"[OCSPCache] %@", logLine);
+    }];
+
+    return cache;
+}
+
+#pragma mark - OCSPAuthURLSessionDelegate initialization
+
+- (OCSPAuthURLSessionDelegate*)ocspAuthURLSessionDelegateWithLogging {
+    void (^logger)(NSString * _Nonnull logLine) =
+    ^(NSString * _Nonnull logLine) {
+        NSLog(@"[OCSPAuthURLSessionDelegate] %@", logLine);
+    };
+
+    NSURL* (^modifyOCSPURL)(NSURL *url) =
+    ^NSURL*(NSURL *url) {
+        NSLog(@"[OCSPAuthURLSessionDelegate] Making OCSP request to %@", url);
+        return nil;
+    };
+
+    OCSPCache *ocspCache = [self ocspCacheWithLogging];
+
+    OCSPAuthURLSessionDelegate *authURLSessionDelegate =
+    [[OCSPAuthURLSessionDelegate alloc] initWithLogger:logger
+                                             ocspCache:ocspCache
+                                         modifyOCSPURL:modifyOCSPURL
+                                               session:nil];
+
+    return authURLSessionDelegate;
+}
+
+#pragma mark - Certificate loading
+
+/// Google Certificates
+
+- (SecCertificateRef)googleLeafCert {
+    return [self loadCertificateFailOnError:@"Certs/Google/cert.der"
+                         expectedCommonName:@"www.google.com"];
+}
+
+- (SecCertificateRef)googleIntermediateCert {
+    return [self loadCertificateFailOnError:@"Certs/Google/intermediate.der"
+                         expectedCommonName:@"Google Internet Authority G3"];
+}
+
+- (SecCertificateRef)googleRootCert {
+    return [self loadCertificateFailOnError:@"Certs/Google/root.der"
+                         expectedCommonName:@"www.google.com"];
+}
+
+/// Local Certificates
+
+- (SecCertificateRef)localOCSPURLsCert {
+    return [self loadCertificateFailOnError:@"Certs/DemoCA/local_ocsp_urls.der"
+                         expectedCommonName:@"Local OCSP URLs"];
+}
+
+- (SecCertificateRef)badOCSPURLsCert {
+    return [self loadCertificateFailOnError:@"Certs/DemoCA/bad_ocsp_urls.der"
+                         expectedCommonName:@"Bad OCSP URLs"];
+}
+
+- (SecCertificateRef)noOCSPURLsCert {
+    return [self loadCertificateFailOnError:@"Certs/DemoCA/no_ocsp_urls.der"
+                         expectedCommonName:@"No OCSP URLs"];
+}
+
+- (SecCertificateRef)rootCACert {
+    return [self loadCertificateFailOnError:@"Certs/DemoCA/root_CA.der"
+                         expectedCommonName:@"Demo CA"];
+}
+
 #pragma mark - Helpers for loading certificates
+
+- (SecCertificateRef)loadCertificateFailOnError:(NSString*)filePath
+                             expectedCommonName:(NSString*)expectedCommonName {
+    SecCertificateRef cert;
+
+    Error *e = [self loadCertificate:filePath
+                  expectedCommonName:expectedCommonName
+                             certRef:&cert];
+    if (e) {
+        XCTFail(@"%@", e);
+    }
+
+    return cert;
+}
 
 // Load certificate and check that common name matches
 - (Error*)loadCertificate:(NSString*)filePath
