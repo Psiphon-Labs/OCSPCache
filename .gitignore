@@ -42,5 +42,5 @@ Carthage/Build
 *.der
 *.key
 *.csr
-Example/Tests/Certs/DemoCA/demoCA
+Example/Tests/Certs/DemoCA/CA
 

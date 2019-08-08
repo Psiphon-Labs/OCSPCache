@@ -23,6 +23,21 @@
 /// Methods for working with SecTrustRef
 
 /**
+ Print properties on trust corresponding to last trust evaluation.
+
+ @param trust Trust.
+ @return Return properties on trust.
+ @discussion See documentation for 'SecTrustCopyProperties'.
+ */
+NSArray* OCSPSecTrustProperties(SecTrustRef trust);
+/**
+ Print properties on trust corresponding to last trust evaluation.
+
+ @param trust Trust.
+ */
+void OCSPSecTrustPrintProperties(SecTrustRef trust);
+
+/**
  Append policy to existing policies set on trust.
 
  @param trust Trust.

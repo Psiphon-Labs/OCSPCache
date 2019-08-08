@@ -21,6 +21,19 @@
 
 
 // See comment in header
+NSArray* OCSPSecTrustProperties(SecTrustRef trust) {
+    return (__bridge_transfer NSArray*)SecTrustCopyProperties(trust);
+}
+
+// See comment in header
+void OCSPSecTrustPrintProperties(SecTrustRef trust) {
+    NSArray *properties = OCSPSecTrustProperties(trust);
+    for (int i = 0; i < [properties count]; i++) {
+        NSLog(@"Trust property [%d]: %@", i, [properties objectAtIndex:i]);
+    }
+}
+
+// See comment in header
 void OCSPSecTrustAddPolicy(SecTrustRef trust, SecPolicyRef policy) {
     CFArrayRef policies;
 

@@ -111,11 +111,17 @@
 // Test OCSP Cache with trust object lookup
 - (void)testCacheLookupWithTrust
 {
-    SecCertificateRef cert = [self localOCSPURLsCert];
+    SecCertificateRef leaf = [self localOCSPURLsCert];
 
-    NSArray *certArray = @[(__bridge id)cert];
+    SecCertificateRef intermediate = [self intermediateCACert];
 
-    SecPolicyRef policy;
+    SecCertificateRef root = [self rootCACert];
+
+    NSArray *certArray = @[(__bridge id)leaf, (__bridge id)intermediate, (__bridge id)root];
+
+    SecPolicyRef policy = SecPolicyCreateRevocation(kSecRevocationOCSPMethod |
+                                                    kSecRevocationRequirePositiveResponse |
+                                                    kSecRevocationNetworkAccessDisabled);
     SecTrustRef trust;
     OSStatus status = SecTrustCreateWithCertificates((__bridge CFTypeRef)certArray,
                                                      policy,
@@ -136,7 +142,7 @@
               session:nil
            completion:^(OCSPCacheLookupResult * _Nonnull result) {
         [self checkResultAndEvaluate:trust
-                                cert:cert
+                                cert:leaf
                               result:result
                                cache:ocspCache
                         expectCached:NO
@@ -214,7 +220,7 @@
 {
     SecCertificateRef cert = [self localOCSPURLsCert];
 
-    SecCertificateRef issuer = [self rootCACert];
+    SecCertificateRef issuer = [self intermediateCACert];
 
     [self ocspCacheTestWithCert:cert andIssuer:issuer];
 }
@@ -297,12 +303,13 @@
      ^(OCSPCacheLookupResult *r) {
          XCTAssert(r.response == nil);
          XCTAssert(r.err != nil);
-         XCTAssert(r.err.domain == OCSPCacheErrorDomain);
-         XCTAssert(r.err.code == OCSPCacheErrorConstructingOCSPRequests);
+
+         XCTAssertEqual(r.err.domain, OCSPCacheErrorDomain);
+         XCTAssertEqual(r.err.code, OCSPCacheErrorConstructingOCSPRequests);
          NSError *underlyingError = [r.err.userInfo objectForKey:NSUnderlyingErrorKey];
-         XCTAssert(underlyingError != nil);
-         XCTAssert(underlyingError.domain == OCSPCertErrorDomain);
-         XCTAssert(underlyingError.code == OCSPCertErrorCodeNoOCSPURLs);
+         XCTAssert(underlyingError.domain != nil);
+         XCTAssertEqual(underlyingError.domain, OCSPCertErrorDomain);
+         XCTAssertEqual(underlyingError.code, OCSPCertErrorCodeNoOCSPURLs);
          XCTAssert(r.cached == FALSE);
 
          [expectResult fulfill];
@@ -343,8 +350,8 @@
      ^(OCSPCacheLookupResult *r) {
          XCTAssert(r.response == nil);
          XCTAssert(r.err != nil);
-         XCTAssert(r.err.domain == OCSPCacheErrorDomain);
-         XCTAssert(r.err.code == OCSPCacheErrorCodeNoSuccessfulResponse);
+         XCTAssertEqual(r.err.domain, OCSPCacheErrorDomain);
+         XCTAssertEqual(r.err.code, OCSPCacheErrorCodeNoSuccessfulResponse);
          XCTAssert(r.cached == FALSE);
 
          [expectResult fulfill];
@@ -360,7 +367,8 @@
 #pragma mark - Helpers for certificate evaluations
 
 // Run a series of tests against the cache
-- (void)ocspCacheTestWithCert:(SecCertificateRef)certRef andIssuer:(SecCertificateRef)issuerRef
+- (void)ocspCacheTestWithCert:(SecCertificateRef)certRef
+                    andIssuer:(SecCertificateRef)issuerRef
 {
     NSTimeInterval defaultTimeout = 10;
 
@@ -449,6 +457,9 @@
     [ocspCache setCacheValueForCert:certRef data:d];
 
     // First attempt fails, but the invalid response is evicted
+    // NOTE: if this test starts failing the OCSP response may have
+    //       been cached by the OS. To clear the OCSP cache of the
+    //       simulator use `Hardware->Erase All Content and Settings...`
     [self cacheBasicTest:trust
                  certRef:certRef
                   issuer:issuerRef
@@ -517,23 +528,24 @@
                  expectSuccess:(BOOL)expectSuccess
                 evictOnFailure:(BOOL)evictOnFailure
 {
-     SecTrustResultType trustEvaluateResult = [self checkResultAndEvaulate:trust
-                                                                    result:result
-                                                              expectCached:expectCached];
+    SecTrustResultType trustEvaluateResult = [self checkResultAndEvaulate:trust
+                                                                result:result
+                                                          expectCached:expectCached];
 
-     BOOL success =    trustEvaluateResult == kSecTrustResultProceed
-                    || trustEvaluateResult == kSecTrustResultUnspecified;
+    BOOL success =    trustEvaluateResult == kSecTrustResultProceed
+                   || trustEvaluateResult == kSecTrustResultUnspecified;
 
-     XCTAssert(success == expectSuccess);
+    XCTAssertEqual(success, expectSuccess);
 
-     if (!success) {
-         if (expectSuccess) {
-             XCTFail(@"Unexpected result: %d", trustEvaluateResult);
-         }
-         if (evictOnFailure) {
-             [cache removeCacheValueForCert:cert];
-         }
+    if (!success) {
+     if (expectSuccess) {
+         OCSPSecTrustPrintProperties(trust);
+         XCTFail(@"Unexpected result: %d", trustEvaluateResult);
      }
+     if (evictOnFailure) {
+         [cache removeCacheValueForCert:cert];
+     }
+    }
 }
 
 // Helper for checking cache results
@@ -544,7 +556,7 @@
     XCTAssert(result.err == nil);
     XCTAssert(result.response != nil);
     XCTAssert([result.response success] == TRUE);
-    XCTAssert(result.cached == expectCached);
+    XCTAssertEqual(result.cached, expectCached);
 
     CFDataRef ocspResponseDataRef = (__bridge CFDataRef)result.response.data;
     OSStatus status = SecTrustSetOCSPResponse(trust, ocspResponseDataRef);
@@ -635,23 +647,28 @@
 /// Local Certificates
 
 - (SecCertificateRef)localOCSPURLsCert {
-    return [self loadCertificateFailOnError:@"Certs/DemoCA/local_ocsp_urls.der"
+    return [self loadCertificateFailOnError:@"Certs/DemoCA/CA/intermediate/enduser-certs/local_ocsp_urls.der"
                          expectedCommonName:@"Local OCSP URLs"];
 }
 
 - (SecCertificateRef)badOCSPURLsCert {
-    return [self loadCertificateFailOnError:@"Certs/DemoCA/bad_ocsp_urls.der"
+    return [self loadCertificateFailOnError:@"Certs/DemoCA/CA/intermediate/enduser-certs/bad_ocsp_urls.der"
                          expectedCommonName:@"Bad OCSP URLs"];
 }
 
 - (SecCertificateRef)noOCSPURLsCert {
-    return [self loadCertificateFailOnError:@"Certs/DemoCA/no_ocsp_urls.der"
+    return [self loadCertificateFailOnError:@"Certs/DemoCA/CA/intermediate/enduser-certs/no_ocsp_urls.der"
                          expectedCommonName:@"No OCSP URLs"];
 }
 
+- (SecCertificateRef)intermediateCACert {
+    return [self loadCertificateFailOnError:@"Certs/DemoCA/CA/root/intermediate_CA.der"
+                         expectedCommonName:@"Intermediate CA"];
+}
+
 - (SecCertificateRef)rootCACert {
-    return [self loadCertificateFailOnError:@"Certs/DemoCA/root_CA.der"
-                         expectedCommonName:@"Demo CA"];
+    return [self loadCertificateFailOnError:@"Certs/DemoCA/CA/root/root_CA.der"
+                         expectedCommonName:@"Root CA"];
 }
 
 #pragma mark - Helpers for loading certificates

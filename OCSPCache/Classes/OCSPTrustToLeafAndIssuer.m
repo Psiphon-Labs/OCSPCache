@@ -45,7 +45,7 @@ NSErrorDomain _Nonnull const OCSPTrustToLeafAndIssuerErrorDomain =
         *error = [NSError errorWithDomain:OCSPTrustToLeafAndIssuerErrorDomain
                                      code:OCSPTrustToLeafAndIssuerErrorCodeNoIssuerCert
                                  userInfo:@{NSLocalizedDescriptionKey:@"Failed to get issuer "
-                                            "certificate"}];
+                                                                       "certificate"}];
         return;
     }
 }

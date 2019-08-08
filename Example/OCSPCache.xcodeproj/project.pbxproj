@@ -266,7 +266,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\nmkdir ./Tests/Certs/Google\n\ncd ./Tests/Certs/Google\n\nopenssl s_client -showcerts -connect www.google.com:443 < /dev/null > ./cert-chain.pem\n\n../pem-split.sh ./cert-chain.pem\n\n# Convert to DER for easier loading\nopenssl x509 -inform pem -in ./cert-chain.pem -outform der -out ./cert.der\n\n# Convert to DER for easier loading\nmv ./cert0.pem ./root.pem\nopenssl x509 -inform pem -in ./root.pem -outform der -out ./root.der\nrm ./root.pem\n\n# Convert to DER for easier loading\nmv ./cert1.pem ./intermediate.pem\nopenssl x509 -inform pem -in ./intermediate.pem -outform der -out ./intermediate.der\nrm ./intermediate.pem\n";
+			shellScript = "set -o errexit\n\nmkdir ./Tests/Certs/Google || True # Directory may already exist\n\ncd ./Tests/Certs/Google\n\nopenssl s_client -showcerts -connect www.google.com:443 < /dev/null > ./cert-chain.pem\n\n../pem-split.sh ./cert-chain.pem\n\n# Convert to DER for easier loading\nopenssl x509 -inform pem -in ./cert-chain.pem -outform der -out ./cert.der\n\n# Convert to DER for easier loading\nmv ./cert0.pem ./root.pem\nopenssl x509 -inform pem -in ./root.pem -outform der -out ./root.der\nrm ./root.pem\n\n# Convert to DER for easier loading\nmv ./cert1.pem ./intermediate.pem\nopenssl x509 -inform pem -in ./intermediate.pem -outform der -out ./intermediate.der\nrm ./intermediate.pem\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

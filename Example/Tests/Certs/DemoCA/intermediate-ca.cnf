@@ -1,0 +1,124 @@
+#
+# OpenSSL configuration file for an intermediate CA.
+# Used by `setup.sh`.
+#
+
+DIR = ./
+DIR = $ENV::DIR
+OCSP_SECTION=local_ocsp
+
+[ ca ]
+default_ca = CA_default
+
+[ crl_ext ]
+issuerAltName          = issuer:copy 
+authorityKeyIdentifier = keyid:always
+
+[ CA_default ]
+new_certs_dir    = $DIR
+unique_subject   = no
+certificate      = $DIR/intermediate1.crt
+database         = $DIR/certindex
+private_key      = $DIR/intermediate1.key
+serial           = $DIR/certserial
+default_days     = 365
+default_md       = sha256
+policy           = CA_default_policy
+x509_extensions  = CA_default_extensions
+crlnumber        = $DIR/crlnumber
+default_crl_days = 365
+
+[ CA_default_policy ]
+commonName             = supplied
+stateOrProvinceName    = supplied
+countryName            = optional
+emailAddress           = optional
+organizationName       = supplied
+organizationalUnitName = optional
+
+[ CA_default_extensions ]
+basicConstraints       = critical,CA:FALSE
+keyUsage               = critical,any
+subjectKeyIdentifier   = hash
+authorityKeyIdentifier = keyid:always,issuer
+keyUsage               = digitalSignature,keyEncipherment
+extendedKeyUsage       = serverAuth
+subjectAltName         = @alt_names
+authorityInfoAccess    = @${ENV::OCSP_SECTION}
+
+[ alt_names ]
+DNS.0 = example.com
+
+[ local_ocsp ]
+OCSP;URI.0 = http://127.0.0.1:8081
+
+[ bad_ocsp ]
+OCSP;URI.0 = invalid_ocsp_uri_1
+OCSP;URI.1 = invalid_ocsp_uri_2
+
+[no_ocsp_urls]
+basicConstraints       = ${CA_default_extensions::basicConstraints}
+keyUsage               = ${CA_default_extensions::keyUsage}
+subjectKeyIdentifier   = ${CA_default_extensions::subjectKeyIdentifier}
+authorityKeyIdentifier = ${CA_default_extensions::authorityKeyIdentifier}
+keyUsage               = ${CA_default_extensions::keyUsage}
+extendedKeyUsage       = ${CA_default_extensions::extendedKeyUsage}
+subjectAltName         = ${CA_default_extensions::subjectAltName}
+
+[ v3_ocsp ]
+basicConstraints = CA:FALSE
+keyUsage         = nonRepudiation, digitalSignature, keyEncipherment
+extendedKeyUsage = OCSPSigning
+
+[ req ]
+default_bits       = 2048
+default_keyfile    = privkey.pem
+distinguished_name = req_distinguished_name
+attributes         = req_attributes
+
+# Passwords for private keys if not present they will be prompted for
+# input_password  = secret
+# output_password = secret
+
+# This sets a mask for permitted string types. There are several options.
+# default: PrintableString, T61String, BMPString.
+# pkix   : PrintableString, BMPString (PKIX recommendation before 2004)
+# utf8only: only UTF8Strings (PKIX recommendation after 2004).
+# nombstr : PrintableString, T61String (no BMPStrings or UTF8Strings).
+# MASK:XXXX a literal mask value.
+# WARNING: ancient versions of Netscape crash on BMPStrings or UTF8Strings.
+string_mask = utf8only
+
+[ req_distinguished_name ]
+countryName          = Country Name (2 letter code)
+countryName_default  = AU
+countryName_min      = 2
+countryName_max      = 2
+
+stateOrProvinceName         = State or Province Name (full name)
+stateOrProvinceName_default = Some-State
+
+localityName         = Locality Name (eg, city)
+localityName_default = city
+
+0.organizationName          = Organization Name (eg, company)
+0.organizationName_default  = Internet Widgits Pty Ltd
+
+# we can do this but it is not needed normally :-)
+#1.organizationName         = Second Organization Name (eg, company)
+#1.organizationName_default = World Wide Web Pty Ltd
+
+organizationalUnitName         = Organizational Unit Name (eg, section)
+organizationalUnitName_default = section
+
+commonName          = Common Name (e.g. server FQDN or YOUR name)
+commonName_max      = 64
+
+emailAddress         = Email Address
+emailAddress_default = example.com
+emailAddress_max     = 64
+
+[ req_attributes ]
+challengePassword      = A challenge password
+challengePassword_min  = 4
+challengePassword_max  = 20

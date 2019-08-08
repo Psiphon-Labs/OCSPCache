@@ -87,7 +87,6 @@
 
         [self evaluateTrust:trust completionHandler:completionHandler];
 
-
         return;
     }
 
