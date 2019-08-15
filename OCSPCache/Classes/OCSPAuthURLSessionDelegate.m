@@ -308,9 +308,6 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
         CFDataRef d = (__bridge CFDataRef)result.response.data;
         SecTrustSetOCSPResponse(trust, d);
 
-        SecTrustResultType trustResultType;
-        SecTrustEvaluate(trust, &trustResultType);
-
         SecPolicyRef policy = SecPolicyCreateRevocation(kSecRevocationOCSPMethod |
                                                         kSecRevocationRequirePositiveResponse |
                                                         kSecRevocationNetworkAccessDisabled);
