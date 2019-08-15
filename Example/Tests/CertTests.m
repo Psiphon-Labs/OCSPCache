@@ -29,11 +29,11 @@
 #import "OCSPSecTrust.h"
 
 
-@interface Tests : XCTestCase
+@interface CertTests : XCTestCase
 
 @end
 
-@implementation Tests
+@implementation CertTests
 
 - (void)setUp
 {
@@ -234,6 +234,46 @@
     SecCertificateRef issuer = [self intermediateCACert];
 
     ErrorTs *xs = [self ocspCacheTestWithCert:cert andIssuer:issuer];
+    for (NSString *e in [xs flattenedAndReducedErrors]) {
+        XCTFail(@"%@", e);
+    }
+}
+
+// Test OCSP Cache with Demo CA Certificate using local OCSP Server
+// Note: the certificate needs to be revoked before running this test:
+//       use the script `revoke_local_ocsp_urls_cert.sh`.
+- (void)testDemoCAWithGoodCertificateRevoked
+{
+    SecCertificateRef cert = [self localOCSPURLsCert];
+
+    SecCertificateRef issuer = [self intermediateCACert];
+
+    NSArray *certArray = @[(__bridge id)cert, (__bridge id)issuer];
+
+    SecPolicyRef policy = SecPolicyCreateRevocation(kSecRevocationOCSPMethod |
+                                                    kSecRevocationRequirePositiveResponse |
+                                                    kSecRevocationNetworkAccessDisabled);
+
+    SecTrustRef trust;
+    OSStatus status = SecTrustCreateWithCertificates((__bridge CFTypeRef)certArray,
+                                                     policy,
+                                                     &trust);
+    if (status != 0) {
+        XCTFail(@"Unexpected OSStatus %d. Check https://osstatus.com/.", status);
+    }
+
+    OCSPCache *ocspCache = [self ocspCacheWithLogging];
+
+    ErrorTs *xs =
+    [self cacheBasicTest:trust
+                 certRef:cert
+                  issuer:issuer
+                   cache:ocspCache
+                 timeout:10
+            expectCached:NO
+           expectSuccess:NO
+          evictOnFailure:NO];
+
     for (NSString *e in [xs flattenedAndReducedErrors]) {
         XCTFail(@"%@", e);
     }
