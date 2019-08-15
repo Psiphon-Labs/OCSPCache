@@ -20,6 +20,8 @@
 @import XCTest;
 
 #import <openssl/ocsp.h>
+#import "ErrorT.h"
+#import "ErrorTs.h"
 #import "OCSPAuthURLSessionDelegate.h"
 #import "OCSPCache.h"
 #import "OCSPCert.h"
@@ -103,7 +105,10 @@
 
     SecCertificateRef issuer = [self googleIntermediateCert];
 
-    [self ocspCacheTestWithCert:cert andIssuer:issuer];
+    ErrorTs *x = [self ocspCacheTestWithCert:cert andIssuer:issuer];
+    for (NSString *e in [x flattenedAndReducedErrors]) {
+        XCTFail(@"%@", e);
+    }
 }
 
 #pragma mark - Cache lookup with trust
@@ -141,6 +146,8 @@
         modifyOCSPURL:nil
               session:nil
            completion:^(OCSPCacheLookupResult * _Nonnull result) {
+
+        ErrorTs *xs =
         [self checkResultAndEvaluate:trust
                                 cert:leaf
                               result:result
@@ -148,6 +155,10 @@
                         expectCached:NO
                        expectSuccess:YES
                       evictOnFailure:NO];
+
+        for (NSString *e in [xs flattenedAndReducedErrors]) {
+            XCTFail(@"%@", e);
+        }
         [expectResult fulfill];
     }];
 
@@ -222,7 +233,10 @@
 
     SecCertificateRef issuer = [self intermediateCACert];
 
-    [self ocspCacheTestWithCert:cert andIssuer:issuer];
+    ErrorTs *xs = [self ocspCacheTestWithCert:cert andIssuer:issuer];
+    for (NSString *e in [xs flattenedAndReducedErrors]) {
+        XCTFail(@"%@", e);
+    }
 }
 
 #pragma mark - Cache race
@@ -367,10 +381,12 @@
 #pragma mark - Helpers for certificate evaluations
 
 // Run a series of tests against the cache
-- (void)ocspCacheTestWithCert:(SecCertificateRef)certRef
-                    andIssuer:(SecCertificateRef)issuerRef
+- (ErrorTs*)ocspCacheTestWithCert:(SecCertificateRef)certRef
+                        andIssuer:(SecCertificateRef)issuerRef
 {
     NSTimeInterval defaultTimeout = 10;
+
+    ErrorTs *errors = [[ErrorTs alloc] init];
 
     NSArray *certArray = @[(__bridge id)certRef, (__bridge id)issuerRef];
 
@@ -383,14 +399,15 @@
                                                      policy,
                                                      &trust);
     if (status != 0) {
-        XCTFail(@"Unexpected OSStatus %d. Check https://osstatus.com/.", status);
-        return;
+        [errors addErrorWithFormat:@"Unexpected OSStatus %d. Check https://osstatus.com/.", status];
+        return errors;
     }
 
     OCSPCache *ocspCache = [self ocspCacheWithLogging];
 
     /// Cache miss
 
+    ErrorTs *xs =
     [self cacheBasicTest:trust
                  certRef:certRef
                   issuer:issuerRef
@@ -400,8 +417,11 @@
            expectSuccess:YES
           evictOnFailure:NO];
 
+    [errors mappendWithContext:xs context:@"CacheMiss"];
+
     /// Cache hit
 
+    xs =
     [self cacheBasicTest:trust
                  certRef:certRef
                   issuer:issuerRef
@@ -410,6 +430,8 @@
             expectCached:YES
            expectSuccess:YES
           evictOnFailure:NO];
+
+    [errors mappendWithContext:xs context:@"CacheHit"];
 
     NSString *userDefaultsKey = @"OCSPCache.ocsp_cache1";
     NSUserDefaults *userDefaults = [NSUserDefaults standardUserDefaults];
@@ -422,6 +444,7 @@
 
     /// Cache hit after load from user defaults
 
+    xs =
     [self cacheBasicTest:trust
                  certRef:certRef
                   issuer:issuerRef
@@ -431,11 +454,14 @@
            expectSuccess:YES
           evictOnFailure:NO];
 
+    [errors mappendWithContext:xs context:@"CacheHitAfterReload"];
+
     /// Cache recovery from cached invalid data
 
     // Cache invalid data
     [ocspCache setCacheValueForCert:certRef data:[[NSData alloc] init]];
 
+    xs =
     [self cacheBasicTest:trust
                  certRef:certRef
                   issuer:issuerRef
@@ -444,6 +470,8 @@
             expectCached:NO
            expectSuccess:YES
           evictOnFailure:NO];
+
+    [errors mappendWithContext:xs context:@"CacheInvalidData"];
 
     /// Cache recovery from cached invalid response
 
@@ -460,6 +488,7 @@
     // NOTE: if this test starts failing the OCSP response may have
     //       been cached by the OS. To clear the OCSP cache of the
     //       simulator use `Hardware->Erase All Content and Settings...`
+    xs =
     [self cacheBasicTest:trust
                  certRef:certRef
                   issuer:issuerRef
@@ -469,7 +498,10 @@
            expectSuccess:NO
           evictOnFailure:YES];
 
+    [errors mappendWithContext:xs context:@"InvalidData"];
+
     // Second attempt succeeds because there is invalid response in the cache
+    xs =
     [self cacheBasicTest:trust
                  certRef:certRef
                   issuer:issuerRef
@@ -478,18 +510,24 @@
             expectCached:NO
            expectSuccess:YES
           evictOnFailure:NO];
+
+    [errors mappendWithContext:xs context:@"InvalidDataExpunged"];
+
+    return errors;
 }
 
 // Helper for testing the cache
-- (void)cacheBasicTest:(SecTrustRef)trust
-               certRef:(SecCertificateRef)certRef
-                issuer:(SecCertificateRef)issuerRef
-                 cache:(OCSPCache*)cache
-               timeout:(NSTimeInterval)timeout
-          expectCached:(BOOL)expectCached
-         expectSuccess:(BOOL)expectSuccess
-        evictOnFailure:(BOOL)evictOnFailure
+- (ErrorTs*)cacheBasicTest:(SecTrustRef)trust
+                   certRef:(SecCertificateRef)certRef
+                    issuer:(SecCertificateRef)issuerRef
+                     cache:(OCSPCache*)cache
+                   timeout:(NSTimeInterval)timeout
+              expectCached:(BOOL)expectCached
+             expectSuccess:(BOOL)expectSuccess
+            evictOnFailure:(BOOL)evictOnFailure
 {
+    ErrorTs *errors = [[ErrorTs alloc] init];
+
     XCTestExpectation *expectResult =
         [self expectationWithDescription:@"Expected result from cache"];
 
@@ -501,6 +539,7 @@
        completion:
      ^(OCSPCacheLookupResult * _Nonnull result) {
 
+         ErrorTs *xs =
          [self checkResultAndEvaluate:trust
                                  cert:certRef
                                result:result
@@ -509,59 +548,60 @@
                         expectSuccess:expectSuccess
                        evictOnFailure:evictOnFailure];
 
+         [errors mappend:xs];
+
          [expectResult fulfill];
      }];
 
-    [self waitForExpectationsWithTimeout:timeout handler:^(NSError * _Nullable error) {
+    [self waitForExpectationsWithTimeout:timeout
+                                 handler:^(NSError * _Nullable error) {
         if (error != nil) {
-            XCTFail(@"Timed out waiting for expectations: %@", error.localizedDescription);
+            [errors addErrorWithFormat:@"Timed out waiting for expectations: %@",
+                                       error.localizedDescription];
         }
     }];
+
+    return errors;
 }
 
 // Helper for testing the cache
-- (void)checkResultAndEvaluate:(SecTrustRef)trust
-                          cert:(SecCertificateRef)cert
-                        result:(OCSPCacheLookupResult*)result
-                         cache:(OCSPCache*)cache
-                  expectCached:(BOOL)expectCached
-                 expectSuccess:(BOOL)expectSuccess
-                evictOnFailure:(BOOL)evictOnFailure
+- (ErrorTs*)checkResultAndEvaluate:(SecTrustRef)trust
+                              cert:(SecCertificateRef)cert
+                            result:(OCSPCacheLookupResult*)result
+                             cache:(OCSPCache*)cache
+                      expectCached:(BOOL)expectCached
+                     expectSuccess:(BOOL)expectSuccess
+                    evictOnFailure:(BOOL)evictOnFailure
 {
-    SecTrustResultType trustEvaluateResult = [self checkResultAndEvaulate:trust
-                                                                result:result
-                                                          expectCached:expectCached];
+    ErrorTs *errors = [[ErrorTs alloc] init];
 
-    BOOL success =    trustEvaluateResult == kSecTrustResultProceed
-                   || trustEvaluateResult == kSecTrustResultUnspecified;
-
-    XCTAssertEqual(success, expectSuccess);
-
-    if (!success) {
-     if (expectSuccess) {
-         OCSPSecTrustPrintProperties(trust);
-         XCTFail(@"Unexpected result: %d", trustEvaluateResult);
-     }
-     if (evictOnFailure) {
-         [cache removeCacheValueForCert:cert];
-     }
+    if (result == nil) {
+        [errors addErrorWithString:@"OCSPCache result is nil"];
     }
-}
 
-// Helper for checking cache results
-- (SecTrustResultType)checkResultAndEvaulate:(SecTrustRef)trust
-                                      result:(OCSPCacheLookupResult*)result
-                                expectCached:(BOOL)expectCached {
-    XCTAssert(result != nil);
-    XCTAssert(result.err == nil);
-    XCTAssert(result.response != nil);
-    XCTAssert([result.response success] == TRUE);
-    XCTAssertEqual(result.cached, expectCached);
+    if (result.err != nil) {
+        [errors addErrorWithFormat:@"OCSPCache result has error: %@",
+                                   result.err.localizedDescription];
+    }
+
+    if (result.response == nil) {
+        [errors addErrorWithString:@"OCSP response is nil"];
+    }
+
+    if ([result.response success] != TRUE) {
+        [errors addErrorWithString:@"Response is not successful"];
+    }
+
+    if (result.cached != expectCached) {
+        NSString *s = expectCached ? @"cached" : @"not cached";
+        [errors addErrorWithFormat:@"Expected result to be %@", s];
+    }
 
     CFDataRef ocspResponseDataRef = (__bridge CFDataRef)result.response.data;
     OSStatus status = SecTrustSetOCSPResponse(trust, ocspResponseDataRef);
     if (status != 0) {
-        XCTFail(@"Unexpected OSStatus %d. Check https://osstatus.com/.", status);
+        [errors addErrorWithFormat:@"Unexpected OSStatus %d. Check https://osstatus.com/.",
+                                   status];
     }
 
     // Check that there are no expired responses
@@ -575,18 +615,41 @@
         Error *err = [expiredResponse first];
         OCSPSingleResponse *r = [expiredResponse second];
         BOOL expired = [expiredResponse third].boolValue;
-        XCTAssert(err == nil);
-        XCTAssert(r != nil);
-        XCTAssert(expired == FALSE);
+
+        if (err != nil) {
+            [errors addErrorWithFormat:@"Error getting expired responses: %@", err];
+        }
+        if (r == nil) {
+            [errors addErrorWithString:@"OCSPSingleResponse is nil"];
+        }
+        if (expired == TRUE) {
+            [errors addErrorWithString:@"OCSPSingleResponse is expired"];
+        }
     }
 
-    SecTrustResultType trustEvaulateResult;
-    status = SecTrustEvaluate(trust, &trustEvaulateResult);
+    SecTrustResultType trustEvaluateResult;
+    status = SecTrustEvaluate(trust, &trustEvaluateResult);
     if (status != 0) {
-        XCTFail(@"Unexpected OSStatus %d. Check https://osstatus.com/.", status);
+        [errors addErrorWithFormat:@"Unexpected OSStatus %d. Check https://osstatus.com/.",
+                                   status];
     }
 
-    return trustEvaulateResult;
+    BOOL success =    trustEvaluateResult == kSecTrustResultProceed
+                   || trustEvaluateResult == kSecTrustResultUnspecified;
+
+    if (success != expectSuccess) {
+        if (expectSuccess) {
+            OCSPSecTrustPrintProperties(trust);
+        }
+        NSString *s = expectSuccess ? @"success" : @"failure";
+        [errors addErrorWithFormat:@"Expected evaluate to result in %@", s];
+    }
+
+    if (!success && evictOnFailure) {
+        [cache removeCacheValueForCert:cert];
+    }
+
+    return errors;
 }
 
 #pragma mark - OCSPCache initialization

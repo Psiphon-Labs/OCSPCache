@@ -32,7 +32,7 @@
       <CodeCoverageTargets>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "D6B4C2C4339C352330FB5A63E4195EA1"
+            BlueprintIdentifier = "712487A67DF2F0F95786F239A606BB04"
             BuildableName = "libOCSPCache.a"
             BlueprintName = "OCSPCache"
             ReferencedContainer = "container:Pods/Pods.xcodeproj">

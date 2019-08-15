@@ -13,6 +13,9 @@
 		6003F5BA195388D20070C39A /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 6003F5B8195388D20070C39A /* InfoPlist.strings */; };
 		6003F5BC195388D20070C39A /* Tests.m in Sources */ = {isa = PBXBuildFile; fileRef = 6003F5BB195388D20070C39A /* Tests.m */; };
 		CE0FD8F81E11490A21472A3F /* libPods-OCSPCache_Tests.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 007035E881D531C5D9AA267F /* libPods-OCSPCache_Tests.a */; };
+		CE839F7923034AF100F20306 /* ErrorT.m in Sources */ = {isa = PBXBuildFile; fileRef = CE839F7823034AF100F20306 /* ErrorT.m */; };
+		CE839F7C2305CB8700F20306 /* ErrorTs.m in Sources */ = {isa = PBXBuildFile; fileRef = CE839F7B2305CB8700F20306 /* ErrorTs.m */; };
+		CE839F7E2305EE6F00F20306 /* ErrorTTests.m in Sources */ = {isa = PBXBuildFile; fileRef = CE839F7D2305EE6F00F20306 /* ErrorTTests.m */; };
 		CE8C9BD522B08B5A00FF30F5 /* Certs in Resources */ = {isa = PBXBuildFile; fileRef = CE8C9BD322B07C4600FF30F5 /* Certs */; };
 /* End PBXBuildFile section */
 
@@ -31,6 +34,11 @@
 		9A9A512B21BD487BEE876F64 /* Pods-OCSPCache_Tests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OCSPCache_Tests.release.xcconfig"; path = "Pods/Target Support Files/Pods-OCSPCache_Tests/Pods-OCSPCache_Tests.release.xcconfig"; sourceTree = "<group>"; };
 		9F2B5AB7027DE92D0F59706F /* README.md */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = net.daringfireball.markdown; name = README.md; path = ../README.md; sourceTree = "<group>"; };
 		AEE6A2461B50EF3E9C5B404D /* Pods-OCSPCache_Tests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OCSPCache_Tests.debug.xcconfig"; path = "Pods/Target Support Files/Pods-OCSPCache_Tests/Pods-OCSPCache_Tests.debug.xcconfig"; sourceTree = "<group>"; };
+		CE839F7723034AF100F20306 /* ErrorT.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ErrorT.h; sourceTree = "<group>"; };
+		CE839F7823034AF100F20306 /* ErrorT.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ErrorT.m; sourceTree = "<group>"; };
+		CE839F7A2305CB8700F20306 /* ErrorTs.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ErrorTs.h; sourceTree = "<group>"; };
+		CE839F7B2305CB8700F20306 /* ErrorTs.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ErrorTs.m; sourceTree = "<group>"; };
+		CE839F7D2305EE6F00F20306 /* ErrorTTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ErrorTTests.m; sourceTree = "<group>"; };
 		CE8C9BD322B07C4600FF30F5 /* Certs */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Certs; sourceTree = "<group>"; };
 		E273E7CF3DAB218A11294A91 /* LICENSE */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; name = LICENSE; path = ../LICENSE; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -95,6 +103,11 @@
 			children = (
 				CE8C9BD322B07C4600FF30F5 /* Certs */,
 				6003F5BB195388D20070C39A /* Tests.m */,
+				CE839F7D2305EE6F00F20306 /* ErrorTTests.m */,
+				CE839F7723034AF100F20306 /* ErrorT.h */,
+				CE839F7823034AF100F20306 /* ErrorT.m */,
+				CE839F7A2305CB8700F20306 /* ErrorTs.h */,
+				CE839F7B2305CB8700F20306 /* ErrorTs.m */,
 				6003F5B6195388D20070C39A /* Supporting Files */,
 			);
 			path = Tests;
@@ -275,7 +288,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CE839F7C2305CB8700F20306 /* ErrorTs.m in Sources */,
+				CE839F7E2305EE6F00F20306 /* ErrorTTests.m in Sources */,
 				6003F5BC195388D20070C39A /* Tests.m in Sources */,
+				CE839F7923034AF100F20306 /* ErrorT.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
