@@ -28,7 +28,6 @@
 #import "OCSPError.h"
 #import "OCSPSecTrust.h"
 
-
 @interface CertTests : XCTestCase
 
 @end
@@ -62,6 +61,31 @@
 // NOTE: start `server.go` and ensure local OCSP servers are running (see README.md)
 //       before running this test.
 - (void)testNetworkRequestWithAuthenticationChallenge {
+    ErrorTs *x = [self networkRequestWithAuthenticationChallenge:NO withNSURLErrorCode:0];
+    for (NSString *e in [x flattenedAndReducedErrors]) {
+        XCTFail(@"%@", e);
+    }
+
+}
+
+// Network request with an authentication challenge to exercise OCSPAuthURLSessionDelegate in the
+// scenario where an intermediate certificate is revoked.
+// Note: 1) The intermediate certificate needs to be revoked before
+//          running this test: use the script `revoke_local_ocsp_urls_cert.sh`.
+//       2) Restart the root OCSP server (see README.md)
+//       3) Start `server.go` and ensure local OCSP servers are running (see README.md)
+//          before running this test.
+- (void)testNetworkRequestWithAuthenticationChallengeIntermediateRevoked {
+    ErrorTs *x = [self networkRequestWithAuthenticationChallenge:YES
+                                              withNSURLErrorCode:NSURLErrorServerCertificateUntrusted];
+    for (NSString *e in [x flattenedAndReducedErrors]) {
+        XCTFail(@"%@", e);
+    }
+}
+
+- (ErrorTs*)networkRequestWithAuthenticationChallenge:(BOOL)expectFailure
+                                 withNSURLErrorCode:(NSInteger)expectedErrorCode {
+    ErrorTs *errors = [[ErrorTs alloc] init];
 
     OCSPAuthURLSessionDelegate *authURLSessionDelegate =
     [self ocspAuthURLSessionDelegateWithLogging];
@@ -82,8 +106,17 @@
                                NSURLResponse * _Nullable response,
                                NSError * _Nullable error) {
 
-               XCTAssert(error == nil);
-               XCTAssert(response != nil);
+               if (expectFailure) {
+                   if (error == nil) {
+                       [errors addErrorWithString:@"Expected an error"];
+                   } else if (error.code != expectedErrorCode) {
+                       [errors addErrorWithFormat:@"Expected error code %ld, but got %ld",
+                                                  expectedErrorCode,
+                                                  error.code];
+                   }
+               } else if (error != nil) {
+                   [errors addErrorWithFormat:@"Expected success, but got error: %@", error];
+               }
 
                [expectResult fulfill];
            }
@@ -93,9 +126,12 @@
 
     [self waitForExpectationsWithTimeout:60 handler:^(NSError * _Nullable error) {
         if (error != nil) {
-            XCTFail(@"Timed out waiting for expectations: %@", error.localizedDescription);
+            [errors addErrorWithFormat:@"Timed out waiting for expectations: %@",
+                                       error.localizedDescription];
         }
     }];
+
+    return errors;
 }
 
 #pragma mark - Google Certificates

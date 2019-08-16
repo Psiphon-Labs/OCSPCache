@@ -183,6 +183,42 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
     return r;
 }
 
+/// See comment in header
+- (NSArray<OCSPCacheLookupResult*>*)lookupAll:(SecTrustRef)secTrustRef
+                                   andTimeout:(NSTimeInterval)timeout
+                                modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
+                                      session:(NSURLSession*__nullable)session
+{
+
+    CFIndex certCount = SecTrustGetCertificateCount(secTrustRef);
+
+    dispatch_group_t group = dispatch_group_create();
+
+    __block NSMutableArray<OCSPCacheLookupResult*>* results = [[NSMutableArray alloc] init];
+
+    for (int i = 0; i < certCount-1; i++) {
+        dispatch_group_enter(group);
+        SecCertificateRef issued = SecTrustGetCertificateAtIndex(secTrustRef, i);
+        SecCertificateRef issuer = SecTrustGetCertificateAtIndex(secTrustRef, i+1);
+
+        [self lookup:issued
+          withIssuer:issuer
+          andTimeout:timeout
+       modifyOCSPURL:modifyOCSPURL
+             session:session
+          completion:^(OCSPCacheLookupResult * _Nonnull result) {
+              @synchronized (results) {
+                  [results addObject:result];
+              }
+              dispatch_group_leave(group);
+          }];
+    }
+
+    dispatch_group_wait(group, DISPATCH_TIME_FOREVER); // There is a timeout in the lookup call
+
+    return results;
+}
+
 
 // See comment in header
 - (void)lookup:(SecCertificateRef)secCertRef

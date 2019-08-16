@@ -163,6 +163,15 @@ typedef NS_ERROR_ENUM(OCSPCacheErrorDomain, OCSPCacheErrorCode) {
                    modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
                          session:(NSURLSession*__nullable)session;
 
+/// Blocking lookup which obtains an OCSP response for each certificate in
+/// the chain (excluding the root certificate).
+/// TODO: in the future there should be an async version, but this will require a
+///       small refactor.
+- (NSArray<OCSPCacheLookupResult*>*)lookupAll:(SecTrustRef)secTrustRef
+                                   andTimeout:(NSTimeInterval)timeout
+                                modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
+                                      session:(NSURLSession*__nullable)session;
+
 /*!
  Obtain an OCSP response for the provided certificate.
 

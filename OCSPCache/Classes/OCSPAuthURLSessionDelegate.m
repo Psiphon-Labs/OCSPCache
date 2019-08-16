@@ -174,14 +174,14 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
 
     [self logWithFormat:@"Fetching OCSP response through OCSPCache"];
 
-    OCSPCacheLookupResult *result = [self->ocspCache lookup:trust
-                                                 andTimeout:0
-                                              modifyOCSPURL:modifyOCSPURL
-                                                    session:session];
+    NSArray<OCSPCacheLookupResult*> *results = [self->ocspCache lookupAll:trust
+                                                               andTimeout:0
+                                                            modifyOCSPURL:modifyOCSPURL
+                                                                  session:session];
 
     BOOL evictedResponse;
 
-    [self evaluateOCSPCacheResult:result
+    [self evaluateOCSPCacheResult:results
                   evictedResponse:&evictedResponse
                             trust:trust
                         completed:&completed
@@ -194,24 +194,35 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
     }
 
     // Check if check failed and a response was evicted from the cache
-    if (!completed && evictedResponse && result.cached) {
+    if (!completed && evictedResponse) {
+        BOOL wasCachedResponse = FALSE;
+        for (OCSPCacheLookupResult *result in results) {
+            if (result.cached) {
+                wasCachedResponse = YES;
+                break;
+            }
+        }
 
-        // The response may have been evicted if it was expired or invalid. Retry once.
+        if (wasCachedResponse) {
+            // The response may have been evicted if it was expired or invalid. Retry once.
 
-        OCSPCacheLookupResult *result = [self->ocspCache lookup:trust
-                                                     andTimeout:0
-                                                  modifyOCSPURL:modifyOCSPURL
-                                                        session:session];
+            NSArray<OCSPCacheLookupResult*> *results = [self->ocspCache lookupAll:trust
+                                                                       andTimeout:0
+                                                                    modifyOCSPURL:modifyOCSPURL
+                                                                          session:session];
 
-        [self evaluateOCSPCacheResult:result
-                      evictedResponse:&evictedResponse
-                                trust:trust
-                            completed:&completed
-                   completedWithError:&completedWithError
-                    completionHandler:completionHandler];
-        if (completed) {
-            [self logWithFormat:@"Completed with OCSP response after evict and fetch"];
-            return TRUE;
+            // TODO: we'll need to split out the certificate arrays to decide what to evict
+
+            [self evaluateOCSPCacheResult:results
+                          evictedResponse:&evictedResponse
+                                    trust:trust
+                                completed:&completed
+                       completedWithError:&completedWithError
+                        completionHandler:completionHandler];
+            if (completed) {
+                [self logWithFormat:@"Completed with OCSP response after evict and fetch"];
+                return TRUE;
+            }
         }
     }
 
@@ -283,7 +294,7 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
 }
 
 /// Evaluate response from OCSP cache
-- (void)evaluateOCSPCacheResult:(OCSPCacheLookupResult*)result
+- (void)evaluateOCSPCacheResult:(NSArray<OCSPCacheLookupResult*>*)results
                 evictedResponse:(BOOL*)evictedResponse
                           trust:(SecTrustRef)trust
                       completed:(BOOL*)completed
@@ -294,48 +305,63 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
     *completedWithError = FALSE;
     *evictedResponse = FALSE;
 
-    if (result.err != nil) {
-        [self logWithFormat:@"Error from OCSPCache %@", result.err];
-        return;
-    } else {
+    NSMutableArray *ocspResponses = [[NSMutableArray alloc] init];
 
-        if (result.cached) {
-            [self logWithFormat:@"Got cached OCSP response"];
+    for (OCSPCacheLookupResult* result in results) {
+        if (result.err != nil) {
+            [self logWithFormat:@"Error from OCSPCache %@", result.err];
         } else {
-            [self logWithFormat:@"Fetched OCSP response from remote"];
-        }
 
-        CFDataRef d = (__bridge CFDataRef)result.response.data;
-        SecTrustSetOCSPResponse(trust, d);
-
-        SecPolicyRef policy = SecPolicyCreateRevocation(kSecRevocationOCSPMethod |
-                                                        kSecRevocationRequirePositiveResponse |
-                                                        kSecRevocationNetworkAccessDisabled);
-
-        [self evaluateWithPolicy:policy
-                           trust:trust
-                       completed:completed
-              completedWithError:completedWithError
-               completionHandler:completionHandler];
-
-        if (!*completed || (*completed && *completedWithError)) {
-            [self logWithFormat:@"Evaluate failed with OCSP response from cache"];
-
-            // Remove the cached value. There is no way to tell if it was the reason for
-            // rejection since the iOS OCSP cache is a black box; so we should remove it
-            // just incase the response was invalid or expired.
-            NSInteger certCount = SecTrustGetCertificateCount(trust);
-            if (certCount > 0) {
-                *evictedResponse = YES;
-                SecCertificateRef cert = SecTrustGetCertificateAtIndex(trust, 0);
-                [self->ocspCache removeCacheValueForCert:cert];
+            if (result.cached) {
+                [self logWithFormat:@"Got cached OCSP response"];
             } else {
-                [self logWithFormat:@"No certs in trust"];
+                [self logWithFormat:@"Fetched OCSP response from remote"];
             }
-        }
 
+            [ocspResponses addObject:result.response.data];
+            CFDataRef d = (__bridge CFDataRef)result.response.data;
+            SecTrustSetOCSPResponse(trust, d);
+        }
+    }
+
+    if ([ocspResponses count] > 0) {
+        SecTrustSetOCSPResponse(trust, (__bridge CFArrayRef)ocspResponses);
+    } else {
+        // Already checked this case in the no remote OCSP check
         return;
     }
+
+    SecPolicyRef policy = SecPolicyCreateRevocation(kSecRevocationOCSPMethod |
+                                                    kSecRevocationRequirePositiveResponse |
+                                                    kSecRevocationNetworkAccessDisabled);
+
+    [self evaluateWithPolicy:policy
+                       trust:trust
+                   completed:completed
+          completedWithError:completedWithError
+           completionHandler:completionHandler];
+
+    if (!*completed || (*completed && *completedWithError)) {
+        [self logWithFormat:@"Evaluate failed with OCSP response from cache"];
+
+        // Remove the cached value. There is no way to tell if it was the reason for
+        // rejection since the iOS OCSP cache is a black box; so we should remove it
+        // just incase the response was invalid or expired.
+        NSInteger certCount = SecTrustGetCertificateCount(trust);
+        if (certCount > 0) {
+            // Evict responses for all certificates except the root since there
+            // will be no OCSP response.
+            for (int i = 0; i < certCount-1; i ++) {
+                SecCertificateRef cert = SecTrustGetCertificateAtIndex(trust, i);
+                [self->ocspCache removeCacheValueForCert:cert];
+            }
+            *evictedResponse = YES;
+        } else {
+            [self logWithFormat:@"No certs in trust"];
+        }
+    }
+
+    return;
 }
 
 /// Try default system CRL checking with a positive response required

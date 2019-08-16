@@ -52,6 +52,9 @@
                <Test
                   Identifier = "CertTests/testDemoCAWithGoodCertificateRevoked">
                </Test>
+               <Test
+                  Identifier = "CertTests/testNetworkRequestWithAuthenticationChallengeIntermediateRevoked">
+               </Test>
             </SkippedTests>
          </TestableReference>
       </Testables>
