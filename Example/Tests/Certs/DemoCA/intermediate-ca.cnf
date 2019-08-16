@@ -47,7 +47,7 @@ subjectAltName         = @alt_names
 authorityInfoAccess    = @${ENV::OCSP_SECTION}
 
 [ alt_names ]
-DNS.0 = example.com
+DNS.0 = localhost
 
 [ local_ocsp ]
 OCSP;URI.0 = http://127.0.0.1:8081

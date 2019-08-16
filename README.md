@@ -22,6 +22,8 @@ Run [setup.sh](./Example/Tests/Certs/DemoCA/setup.sh) in [./Example/Tests/Certs/
 - Click allow
 - Navigate in the simulator to `Settings->Profiles` and click on the downloaded profile
 - Click install
+- Navigate in the simulator to `Settings->About->Certificate Trust Settings`
+- Enable the switch "Enable Full Trust For Root Certificates" for the installed certificate
 
 #### Start the OCSP Servers
 Run the root OCSP Server [run_root_ocsp_server.sh](./Example/Tests/Certs/DemoCA/run_root_ocsp_server.sh).

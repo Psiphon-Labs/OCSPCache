@@ -4,7 +4,9 @@ set -o errexit
 set -o nounset
 set -o xtrace
 
-BASE_SUBJ="C=XX/ST=state/L=city/O=company/emailAddress=example.com"
+BASE_DIR=$PWD
+
+BASE_SUBJ="C=XX/ST=state/L=city/O=company"
 
 # Setup Demo CA
 
@@ -42,6 +44,10 @@ openssl x509 -in "$ROOT_CA_CRT"\
              -outform DER\
              -out ./root_CA.der
 
+openssl x509 -in "$ROOT_CA_CRT"\
+             -outform PEM\
+             -out ./root_CA.pem
+
 ## Configure
 
 touch certindex
@@ -78,6 +84,10 @@ openssl x509 -in "$INTERMEDIATE_CA_CRT"\
              -outform DER\
              -out ./intermediate_CA.der
 
+openssl x509 -in "$INTERMEDIATE_CA_CRT"\
+             -outform PEM\
+             -out ./intermediate_CA.pem
+
 ## Configure
 
 mkdir -p "$INTERMEDIATE_CA_CERTS_DIR"
@@ -101,7 +111,7 @@ openssl req -new\
             -key local_ocsp_urls.key\
             -out local_ocsp_urls.crt\
             -config "$INTERMEDIATE_CA_CNF"\
-            -subj "/CN=Local OCSP URLs/${BASE_SUBJ}"
+            -subj "/CN=localhost/${BASE_SUBJ}"
 
 openssl x509 -x509toreq\
              -in local_ocsp_urls.crt\
@@ -124,6 +134,10 @@ rm local_ocsp_urls.csr
 openssl x509 -in ./local_ocsp_urls.crt\
              -outform DER\
              -out ./local_ocsp_urls.der
+
+openssl x509 -in ./local_ocsp_urls.crt\
+             -outform PEM\
+             -out ./local_ocsp_urls.pem
 
 # Setup End User Certificate with no OCSP URLs
 
@@ -236,3 +250,10 @@ openssl ca -batch\
            -extensions v3_ocsp
 
 rm ocsp_signing.csr
+
+# Setup certificate chain for server
+
+cd "$BASE_DIR"/CA
+touch cert_chain.pem
+cat "$INTERMEDIATE_CA_CERTS_DIR"/local_ocsp_urls.pem >> cert_chain.pem
+cat "$ROOT_CA_CERTS_DIR"/intermediate_CA.pem >> cert_chain.pem

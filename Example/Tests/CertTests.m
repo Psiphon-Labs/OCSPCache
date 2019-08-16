@@ -59,6 +59,8 @@
 #pragma mark - Network request with authentication challenge
 
 // Network request with an authentication challenge to exercise OCSPAuthURLSessionDelegate
+// NOTE: start `server.go` and ensure local OCSP servers are running (see README.md)
+//       before running this test.
 - (void)testNetworkRequestWithAuthenticationChallenge {
 
     OCSPAuthURLSessionDelegate *authURLSessionDelegate =
@@ -75,7 +77,7 @@
     [self expectationWithDescription:@"Expected result from network request"];
 
     NSURLSessionDataTask *dataTask =
-    [session dataTaskWithURL:[NSURL URLWithString:@"https://github.com/robots.txt"]
+    [session dataTaskWithURL:[NSURL URLWithString:@"https://localhost:8083"]
            completionHandler:^(NSData * _Nullable data,
                                NSURLResponse * _Nullable response,
                                NSError * _Nullable error) {
@@ -751,7 +753,7 @@
 
 - (SecCertificateRef)localOCSPURLsCert {
     return [self loadCertificateFailOnError:@"Certs/DemoCA/CA/intermediate/enduser-certs/local_ocsp_urls.der"
-                         expectedCommonName:@"Local OCSP URLs"];
+                         expectedCommonName:@"localhost"];
 }
 
 - (SecCertificateRef)badOCSPURLsCert {
