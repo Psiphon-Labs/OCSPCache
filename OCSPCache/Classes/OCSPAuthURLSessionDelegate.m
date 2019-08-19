@@ -195,34 +195,26 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
 
     // Check if check failed and a response was evicted from the cache
     if (!completed && evictedResponse) {
-        BOOL wasCachedResponse = FALSE;
-        for (OCSPCacheLookupResult *result in results) {
-            if (result.cached) {
-                wasCachedResponse = YES;
-                break;
-            }
-        }
+        // In the scenario that an intermediate certificate in the chain was missing,
+        // but retrievable through an X509 extension:
+        // - The first SecTrustEvaluate will fail, but the missing certificates will be downloaded
+        //   in this step
+        // - The responses will be evicted
+        // We should retry in this scenario because missing certificates may have been fetched.
+        NSArray<OCSPCacheLookupResult*> *results = [self->ocspCache lookupAll:trust
+                                                                   andTimeout:0
+                                                                modifyOCSPURL:modifyOCSPURL
+                                                                      session:session];
 
-        if (wasCachedResponse) {
-            // The response may have been evicted if it was expired or invalid. Retry once.
-
-            NSArray<OCSPCacheLookupResult*> *results = [self->ocspCache lookupAll:trust
-                                                                       andTimeout:0
-                                                                    modifyOCSPURL:modifyOCSPURL
-                                                                          session:session];
-
-            // TODO: we'll need to split out the certificate arrays to decide what to evict
-
-            [self evaluateOCSPCacheResult:results
-                          evictedResponse:&evictedResponse
-                                    trust:trust
-                                completed:&completed
-                       completedWithError:&completedWithError
-                        completionHandler:completionHandler];
-            if (completed) {
-                [self logWithFormat:@"Completed with OCSP response after evict and fetch"];
-                return TRUE;
-            }
+        [self evaluateOCSPCacheResult:results
+                      evictedResponse:&evictedResponse
+                                trust:trust
+                            completed:&completed
+                   completedWithError:&completedWithError
+                    completionHandler:completionHandler];
+        if (completed) {
+            [self logWithFormat:@"Completed with OCSP response after evict and fetch"];
+            return TRUE;
         }
     }
 
