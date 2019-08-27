@@ -192,6 +192,7 @@
                                cache:ocspCache
                         expectCached:NO
                        expectSuccess:YES
+                 expectLookupFailure:NO
                       evictOnFailure:NO];
 
         for (NSString *e in [xs flattenedAndReducedErrors]) {
@@ -310,6 +311,7 @@
                  timeout:10
             expectCached:NO
            expectSuccess:NO
+     expectLookupFailure:NO
           evictOnFailure:NO];
 
     for (NSString *e in [xs flattenedAndReducedErrors]) {
@@ -493,6 +495,7 @@
                  timeout:defaultTimeout
             expectCached:NO
            expectSuccess:YES
+     expectLookupFailure:NO
           evictOnFailure:NO];
 
     [errors mappendWithContext:xs context:@"CacheMiss"];
@@ -507,6 +510,7 @@
                  timeout:defaultTimeout
             expectCached:YES
            expectSuccess:YES
+     expectLookupFailure:NO
           evictOnFailure:NO];
 
     [errors mappendWithContext:xs context:@"CacheHit"];
@@ -530,6 +534,7 @@
                  timeout:defaultTimeout
             expectCached:YES
            expectSuccess:YES
+     expectLookupFailure:NO
           evictOnFailure:NO];
 
     [errors mappendWithContext:xs context:@"CacheHitAfterReload"];
@@ -547,6 +552,7 @@
                  timeout:defaultTimeout
             expectCached:NO
            expectSuccess:YES
+     expectLookupFailure:NO
           evictOnFailure:NO];
 
     [errors mappendWithContext:xs context:@"CacheInvalidData"];
@@ -574,6 +580,7 @@
                  timeout:defaultTimeout
             expectCached:YES
            expectSuccess:NO
+     expectLookupFailure:NO
           evictOnFailure:YES];
 
     [errors mappendWithContext:xs context:@"InvalidData"];
@@ -587,9 +594,46 @@
                  timeout:defaultTimeout
             expectCached:NO
            expectSuccess:YES
+     expectLookupFailure:NO
           evictOnFailure:NO];
 
     [errors mappendWithContext:xs context:@"InvalidDataExpunged"];
+
+    /// Lookup timeout
+
+    [ocspCache removeCacheValueForCert:certRef];
+
+    xs =
+    [self cacheBasicTest:trust
+                 certRef:certRef
+                  issuer:issuerRef
+                   cache:ocspCache
+                 timeout:0.001
+            expectCached:NO
+           expectSuccess:NO
+     expectLookupFailure:YES
+          evictOnFailure:NO];
+
+    [errors mappendWithContext:xs context:@"LookupTimeout"];
+
+    /// Ensure there are no pending responses cached in OCSPCache
+    /// Tests a previous bug where pending responses were not cleared in OCSPCache when a timeout
+    /// occurred.
+
+    [ocspCache removeCacheValueForCert:certRef];
+
+    xs =
+    [self cacheBasicTest:trust
+                 certRef:certRef
+                  issuer:issuerRef
+                   cache:ocspCache
+                 timeout:defaultTimeout
+            expectCached:NO
+           expectSuccess:YES
+     expectLookupFailure:NO
+          evictOnFailure:NO];
+
+    [errors mappendWithContext:xs context:@"NoStall"];
 
     return errors;
 }
@@ -602,6 +646,7 @@
                    timeout:(NSTimeInterval)timeout
               expectCached:(BOOL)expectCached
              expectSuccess:(BOOL)expectSuccess
+       expectLookupFailure:(BOOL)expectLookupFailure
             evictOnFailure:(BOOL)evictOnFailure
 {
     ErrorTs *errors = [[ErrorTs alloc] init];
@@ -624,6 +669,7 @@
                                 cache:cache
                          expectCached:expectCached
                         expectSuccess:expectSuccess
+                  expectLookupFailure:expectLookupFailure
                        evictOnFailure:evictOnFailure];
 
          [errors mappend:xs];
@@ -631,7 +677,7 @@
          [expectResult fulfill];
      }];
 
-    [self waitForExpectationsWithTimeout:timeout
+    [self waitForExpectationsWithTimeout:timeout + 5
                                  handler:^(NSError * _Nullable error) {
         if (error != nil) {
             [errors addErrorWithFormat:@"Timed out waiting for expectations: %@",
@@ -649,12 +695,25 @@
                              cache:(OCSPCache*)cache
                       expectCached:(BOOL)expectCached
                      expectSuccess:(BOOL)expectSuccess
+               expectLookupFailure:(BOOL)expectLookupFailure
                     evictOnFailure:(BOOL)evictOnFailure
 {
     ErrorTs *errors = [[ErrorTs alloc] init];
 
     if (result == nil) {
         [errors addErrorWithString:@"OCSPCache result is nil"];
+    }
+
+    if (expectLookupFailure) {
+        if (result.err == nil) {
+            [errors addErrorWithString:@"OCSPCache result has no error"];
+        }
+        if (result.err.code != OCSPCacheErrorCodeLookupTimedOut) {
+            [errors addErrorWithFormat:@"Expected OCSPCacheErrorCodeLookupTimedOut, but OCSPCache "
+                                       @"result has error: %@",
+                                        result.err.localizedDescription];
+        }
+        return errors;
     }
 
     if (result.err != nil) {
@@ -761,7 +820,8 @@
     [[OCSPAuthURLSessionDelegate alloc] initWithLogger:logger
                                              ocspCache:ocspCache
                                          modifyOCSPURL:modifyOCSPURL
-                                               session:nil];
+                                               session:nil
+                                               timeout:5];
 
     return authURLSessionDelegate;
 }
