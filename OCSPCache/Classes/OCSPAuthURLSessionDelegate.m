@@ -28,6 +28,7 @@
     NSURL* (^modifyOCSPURL)(NSURL *url);
     OCSPCache* ocspCache;
     NSURLSession *session;
+    NSTimeInterval timeout;
     void (^successfullyValidatedTrust)(SecTrustRef trust);
 }
 
@@ -39,6 +40,7 @@
         [[OCSPCache alloc] initWithLogger:^(NSString * _Nonnull logLine) {
             NSLog(@"[OCSPCache] %@", logLine);
         }];
+        self->timeout = 0;
     }
 
     return self;
@@ -48,7 +50,8 @@
 -  (instancetype)initWithLogger:(void (^)(NSString*))logger
                       ocspCache:(nonnull OCSPCache *)ocspCache
                   modifyOCSPURL:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCSPURL
-                        session:(NSURLSession * _Nullable)session {
+                        session:(NSURLSession * _Nullable)session
+                        timeout:(NSTimeInterval)timeout {
     self = [super init];
 
     if (self) {
@@ -63,6 +66,8 @@
 
             self->session = [NSURLSession sessionWithConfiguration:config];
         }
+        assert(timeout >= 0);
+        self->timeout = timeout;
     }
 
     return self;
@@ -175,7 +180,7 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
     [self logWithFormat:@"Fetching OCSP response through OCSPCache"];
 
     NSArray<OCSPCacheLookupResult*> *results = [self->ocspCache lookupAll:trust
-                                                               andTimeout:0
+                                                               andTimeout:self->timeout
                                                             modifyOCSPURL:modifyOCSPURL
                                                                   session:session];
 
@@ -201,8 +206,10 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
         //   in this step
         // - The responses will be evicted
         // We should retry in this scenario because missing certificates may have been fetched.
+
+        // Cache returned pending response
         NSArray<OCSPCacheLookupResult*> *results = [self->ocspCache lookupAll:trust
-                                                                   andTimeout:0
+                                                                   andTimeout:self->timeout
                                                                 modifyOCSPURL:modifyOCSPURL
                                                                       session:session];
 

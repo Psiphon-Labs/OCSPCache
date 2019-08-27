@@ -60,10 +60,16 @@ typedef void (^AuthCompletion)(NSURLSessionAuthChallengeDisposition, NSURLCreden
 /// @param session Session with which to perform OCSP requests. This is an opportunity for the
 /// caller to specify a proxy to be used by the OCSP requests. If nil, a session with
 /// `ephemeralSessionConfiguration` is created and used.
+/// @param timeout Timeout in seconds for each set of OCSP requests made for a certificate (often 1
+///                request) via OCSPAuthURLSessionDelegate. If the timeout values set in the
+///                provided NSURLSession are shorter, then this value is effectively ignored; if no
+///                NSURLSession is provided, the same applies for the default timeout values of
+///                NSURLSessionConfiguration:ephemeralSessionConfiguration.
 -  (instancetype)initWithLogger:(void (^)(NSString*))logger
                       ocspCache:(OCSPCache*)ocspCache
                   modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
-                        session:(NSURLSession*__nullable)session;
+                        session:(NSURLSession*__nullable)session
+                        timeout:(NSTimeInterval)timeout;
 
 /// Evaluate trust object performing certificate revocation checks in the following order:
 ///   1. OCSP staple
