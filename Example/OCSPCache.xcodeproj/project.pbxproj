@@ -11,8 +11,11 @@
 		6003F5B1195388D20070C39A /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6003F58D195388D20070C39A /* Foundation.framework */; };
 		6003F5B2195388D20070C39A /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6003F591195388D20070C39A /* UIKit.framework */; };
 		6003F5BA195388D20070C39A /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 6003F5B8195388D20070C39A /* InfoPlist.strings */; };
-		6003F5BC195388D20070C39A /* Tests.m in Sources */ = {isa = PBXBuildFile; fileRef = 6003F5BB195388D20070C39A /* Tests.m */; };
+		6003F5BC195388D20070C39A /* CertTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 6003F5BB195388D20070C39A /* CertTests.m */; };
 		CE0FD8F81E11490A21472A3F /* libPods-OCSPCache_Tests.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 007035E881D531C5D9AA267F /* libPods-OCSPCache_Tests.a */; };
+		CE839F7923034AF100F20306 /* ErrorT.m in Sources */ = {isa = PBXBuildFile; fileRef = CE839F7823034AF100F20306 /* ErrorT.m */; };
+		CE839F7C2305CB8700F20306 /* ErrorTs.m in Sources */ = {isa = PBXBuildFile; fileRef = CE839F7B2305CB8700F20306 /* ErrorTs.m */; };
+		CE839F7E2305EE6F00F20306 /* ErrorTTests.m in Sources */ = {isa = PBXBuildFile; fileRef = CE839F7D2305EE6F00F20306 /* ErrorTTests.m */; };
 		CE8C9BD522B08B5A00FF30F5 /* Certs in Resources */ = {isa = PBXBuildFile; fileRef = CE8C9BD322B07C4600FF30F5 /* Certs */; };
 /* End PBXBuildFile section */
 
@@ -25,12 +28,17 @@
 		6003F5AF195388D20070C39A /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = Library/Frameworks/XCTest.framework; sourceTree = DEVELOPER_DIR; };
 		6003F5B7195388D20070C39A /* Tests-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Tests-Info.plist"; sourceTree = "<group>"; };
 		6003F5B9195388D20070C39A /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
-		6003F5BB195388D20070C39A /* Tests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Tests.m; sourceTree = "<group>"; };
+		6003F5BB195388D20070C39A /* CertTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = CertTests.m; sourceTree = "<group>"; };
 		606FC2411953D9B200FFA9A0 /* Tests-Prefix.pch */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Tests-Prefix.pch"; sourceTree = "<group>"; };
 		791348CF01E298D2AD27CA53 /* OCSPCache.podspec */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; name = OCSPCache.podspec; path = ../OCSPCache.podspec; sourceTree = "<group>"; xcLanguageSpecificationIdentifier = xcode.lang.ruby; };
 		9A9A512B21BD487BEE876F64 /* Pods-OCSPCache_Tests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OCSPCache_Tests.release.xcconfig"; path = "Pods/Target Support Files/Pods-OCSPCache_Tests/Pods-OCSPCache_Tests.release.xcconfig"; sourceTree = "<group>"; };
 		9F2B5AB7027DE92D0F59706F /* README.md */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = net.daringfireball.markdown; name = README.md; path = ../README.md; sourceTree = "<group>"; };
 		AEE6A2461B50EF3E9C5B404D /* Pods-OCSPCache_Tests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OCSPCache_Tests.debug.xcconfig"; path = "Pods/Target Support Files/Pods-OCSPCache_Tests/Pods-OCSPCache_Tests.debug.xcconfig"; sourceTree = "<group>"; };
+		CE839F7723034AF100F20306 /* ErrorT.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ErrorT.h; sourceTree = "<group>"; };
+		CE839F7823034AF100F20306 /* ErrorT.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ErrorT.m; sourceTree = "<group>"; };
+		CE839F7A2305CB8700F20306 /* ErrorTs.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ErrorTs.h; sourceTree = "<group>"; };
+		CE839F7B2305CB8700F20306 /* ErrorTs.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ErrorTs.m; sourceTree = "<group>"; };
+		CE839F7D2305EE6F00F20306 /* ErrorTTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ErrorTTests.m; sourceTree = "<group>"; };
 		CE8C9BD322B07C4600FF30F5 /* Certs */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Certs; sourceTree = "<group>"; };
 		E273E7CF3DAB218A11294A91 /* LICENSE */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text; name = LICENSE; path = ../LICENSE; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -94,7 +102,12 @@
 			isa = PBXGroup;
 			children = (
 				CE8C9BD322B07C4600FF30F5 /* Certs */,
-				6003F5BB195388D20070C39A /* Tests.m */,
+				6003F5BB195388D20070C39A /* CertTests.m */,
+				CE839F7D2305EE6F00F20306 /* ErrorTTests.m */,
+				CE839F7723034AF100F20306 /* ErrorT.h */,
+				CE839F7823034AF100F20306 /* ErrorT.m */,
+				CE839F7A2305CB8700F20306 /* ErrorTs.h */,
+				CE839F7B2305CB8700F20306 /* ErrorTs.m */,
 				6003F5B6195388D20070C39A /* Supporting Files */,
 			);
 			path = Tests;
@@ -266,7 +279,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\nmkdir ./Tests/Certs/Google\n\ncd ./Tests/Certs/Google\n\nopenssl s_client -showcerts -connect www.google.com:443 < /dev/null > ./cert-chain.pem\n\n../pem-split.sh ./cert-chain.pem\n\n# Convert to DER for easier loading\nopenssl x509 -inform pem -in ./cert-chain.pem -outform der -out ./cert.der\n\n# Convert to DER for easier loading\nmv ./cert0.pem ./root.pem\nopenssl x509 -inform pem -in ./root.pem -outform der -out ./root.der\nrm ./root.pem\n\n# Convert to DER for easier loading\nmv ./cert1.pem ./intermediate.pem\nopenssl x509 -inform pem -in ./intermediate.pem -outform der -out ./intermediate.der\nrm ./intermediate.pem\n";
+			shellScript = "set -o errexit\n\nmkdir ./Tests/Certs/Google || True # Directory may already exist\n\ncd ./Tests/Certs/Google\n\nopenssl s_client -showcerts -connect www.google.com:443 < /dev/null > ./cert-chain.pem\n\n../pem-split.sh ./cert-chain.pem\n\n# Convert to DER for easier loading\nopenssl x509 -inform pem -in ./cert-chain.pem -outform der -out ./cert.der\n\n# Convert to DER for easier loading\nmv ./cert0.pem ./root.pem\nopenssl x509 -inform pem -in ./root.pem -outform der -out ./root.der\nrm ./root.pem\n\n# Convert to DER for easier loading\nmv ./cert1.pem ./intermediate.pem\nopenssl x509 -inform pem -in ./intermediate.pem -outform der -out ./intermediate.der\nrm ./intermediate.pem\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -275,7 +288,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				6003F5BC195388D20070C39A /* Tests.m in Sources */,
+				CE839F7C2305CB8700F20306 /* ErrorTs.m in Sources */,
+				CE839F7E2305EE6F00F20306 /* ErrorTTests.m in Sources */,
+				6003F5BC195388D20070C39A /* CertTests.m in Sources */,
+				CE839F7923034AF100F20306 /* ErrorT.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

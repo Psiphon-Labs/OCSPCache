@@ -20,6 +20,7 @@
 #import "OCSPRequestService.h"
 #import <openssl/ocsp.h>
 #import "OCSPResponse.h"
+#import "RACDisposable.h"
 #import "RACReplaySubject.h"
 #import "RACSequence.h"
 #import "NSArray+RACSequenceAdditions.h"
@@ -139,7 +140,10 @@ NSErrorDomain _Nonnull const OCSPRequestServiceErrorDomain = @"OCSPRequestServic
             [subscriber sendCompleted];
         }];
         [dataTask resume];
-        return nil;
+
+        return [RACDisposable disposableWithBlock:^{
+            [dataTask cancel];
+        }];
     }];
 }
 

@@ -45,13 +45,13 @@ NSErrorDomain _Nonnull const OCSPTrustToLeafAndIssuerErrorDomain =
         *error = [NSError errorWithDomain:OCSPTrustToLeafAndIssuerErrorDomain
                                      code:OCSPTrustToLeafAndIssuerErrorCodeNoIssuerCert
                                  userInfo:@{NSLocalizedDescriptionKey:@"Failed to get issuer "
-                                            "certificate"}];
+                                                                       "certificate"}];
         return;
     }
 }
 
 + (SecCertificateRef)certAtIndex:(SecTrustRef)trust withIndex:(int)index {
-    if (SecTrustGetCertificateCount(trust) < index) {
+    if (index >= SecTrustGetCertificateCount(trust)) {
         return nil;
     }
 

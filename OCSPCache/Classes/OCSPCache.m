@@ -183,6 +183,42 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
     return r;
 }
 
+/// See comment in header
+- (NSArray<OCSPCacheLookupResult*>*)lookupAll:(SecTrustRef)secTrustRef
+                                   andTimeout:(NSTimeInterval)timeout
+                                modifyOCSPURL:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURL
+                                      session:(NSURLSession*__nullable)session
+{
+
+    CFIndex certCount = SecTrustGetCertificateCount(secTrustRef);
+
+    dispatch_group_t group = dispatch_group_create();
+
+    __block NSMutableArray<OCSPCacheLookupResult*>* results = [[NSMutableArray alloc] init];
+
+    for (int i = 0; i < certCount-1; i++) {
+        dispatch_group_enter(group);
+        SecCertificateRef issued = SecTrustGetCertificateAtIndex(secTrustRef, i);
+        SecCertificateRef issuer = SecTrustGetCertificateAtIndex(secTrustRef, i+1);
+
+        [self lookup:issued
+          withIssuer:issuer
+          andTimeout:timeout
+       modifyOCSPURL:modifyOCSPURL
+             session:session
+          completion:^(OCSPCacheLookupResult * _Nonnull result) {
+              @synchronized (results) {
+                  [results addObject:result];
+              }
+              dispatch_group_leave(group);
+          }];
+    }
+
+    dispatch_group_wait(group, DISPATCH_TIME_FOREVER); // There is a timeout in the lookup call
+
+    return results;
+}
+
 
 // See comment in header
 - (void)lookup:(SecCertificateRef)secCertRef
@@ -299,7 +335,7 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
             [NSError errorWithDomain:OCSPCacheErrorDomain
                                 code:OCSPCacheErrorConstructingOCSPRequests
                             userInfo:@{NSLocalizedDescriptionKey:@"Error constructing OCSP "
-                                       "requests",
+                                                                  "requests",
                                        NSUnderlyingErrorKey:errorGettingOCSPURLs}];
             [self logError:err];
             @synchronized (self) {
@@ -349,11 +385,6 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
                  OCSPResponse *r = (OCSPResponse*)x;
                  if (r.success) {
                      // Successful response, OCSPServer will complete after emitting this
-                     @synchronized (self) {
-                         // Add response to the cache and remove pending response
-                         [strongSelf->cache setObject:r.data forKey:key];
-                         [strongSelf->pendingResponseCache removeObjectForKey:key];
-                     }
                      [response sendNext:r];
                      [response sendCompleted];
                  } else {
@@ -401,14 +432,23 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
             }
 
             return [RACSignal error:[OCSPCache unknownObjectError:x]];
-        }] subscribeNext:^(id _Nullable x) {
-            [self log:@"Service returned response"];
+        }] subscribeNext:^(OCSPResponse *r) {
+            @synchronized (self) {
+                // Add response to the cache and remove pending response
+                [strongSelf->cache setObject:r.data forKey:key];
+                [strongSelf->pendingResponseCache removeObjectForKey:key];
+            }
             dispatch_async(strongSelf->callbackQueue, ^{
-                completion([OCSPCacheLookupResult lookupResultWithResponse:x
+                completion([OCSPCacheLookupResult lookupResultWithResponse:r
                                                                      error:nil
                                                                     cached:FALSE]);
             });
+            [self log:@"Service returned response"];
+
          } error:^(NSError * _Nullable err) {
+             @synchronized (self) {
+                 [self->pendingResponseCache removeObjectForKey:key];
+             }
              [self logError:err];
              dispatch_async(strongSelf->callbackQueue, ^{
                  completion([OCSPCacheLookupResult lookupResultWithResponse:nil
