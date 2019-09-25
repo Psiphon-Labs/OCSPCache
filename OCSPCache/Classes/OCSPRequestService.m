@@ -88,8 +88,6 @@ NSErrorDomain _Nonnull const OCSPRequestServiceErrorDomain = @"OCSPRequestServic
                                    queue:(dispatch_queue_t)queue
 {
     return [RACSignal createSignal:^RACDisposable *(id<RACSubscriber>  _Nonnull subscriber) {
-        NSError *e = nil;
-
         NSURLSession *sessionForRequest;
 
         if (session) {
@@ -113,13 +111,13 @@ NSErrorDomain _Nonnull const OCSPRequestServiceErrorDomain = @"OCSPRequestServic
         [sessionForRequest dataTaskWithRequest:ocspReq
                              completionHandler:^(NSData * _Nullable data,
                                                  NSURLResponse * _Nullable response,
-                                                 NSError * _Nullable error) {
-            if (e != nil) {
+                                                 NSError * _Nullable dataTaskError) {
+            if (dataTaskError != nil) {
                 NSError *error =
                 [NSError errorWithDomain:OCSPRequestServiceErrorDomain
                                     code:OCSPRequestServiceErrorCodeRequestFailed
                                 userInfo:@{NSLocalizedDescriptionKey:@"OCSP request failed",
-                                           NSUnderlyingErrorKey:e}];
+                                           NSUnderlyingErrorKey:dataTaskError}];
                 [subscriber sendNext:error];
                 [subscriber sendCompleted];
                 return;
