@@ -163,14 +163,21 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
     BOOL completed;
     BOOL completedWithError;
 
+    // Copy the original set of policies so the original set can be
+    // restored after each evaluation attempt.
+    CFArrayRef originalPolicies;
+    SecTrustCopyPolicies(trust, &originalPolicies);
+
     // Check if there is a pinned or cached OCSP response
 
     [self trySystemOCSPNoRemote:trust
+               originalPolicies:originalPolicies
                       completed:&completed
              completedWithError:&completedWithError
               completionHandler:completionHandler];
 
     if (completed) {
+        SecTrustSetPolicies(trust, originalPolicies);
         [self logWithFormat:@"Pinned or cached OCSP response found by the system"];
         return TRUE;
     }
@@ -187,6 +194,7 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
     BOOL evictedResponse;
 
     [self evaluateOCSPCacheResult:results
+                 originalPolicies:originalPolicies
                   evictedResponse:&evictedResponse
                             trust:trust
                         completed:&completed
@@ -194,6 +202,7 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
                 completionHandler:completionHandler];
 
     if (completed) {
+        SecTrustSetPolicies(trust, originalPolicies);
         [self logWithFormat:@"Completed with OCSP response"];
         return TRUE;
     }
@@ -214,12 +223,14 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
                                                                       session:session];
 
         [self evaluateOCSPCacheResult:results
+                     originalPolicies:originalPolicies
                       evictedResponse:&evictedResponse
                                 trust:trust
                             completed:&completed
                    completedWithError:&completedWithError
                     completionHandler:completionHandler];
         if (completed) {
+            SecTrustSetPolicies(trust, originalPolicies);
             [self logWithFormat:@"Completed with OCSP response after evict and fetch"];
             return TRUE;
         }
@@ -228,11 +239,13 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
     // Try system CRL check and require a positive response
 
     [self trySystemCRL:trust
+      originalPolicies:originalPolicies
              completed:&completed
     completedWithError:&completedWithError
      completionHandler:completionHandler];
 
     if (completed) {
+        SecTrustSetPolicies(trust, originalPolicies);
         [self logWithFormat:@"Evaluate completed by successful system CRL check"];
         return TRUE;
     }
@@ -240,15 +253,18 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
     // Unfortunately relax our requirements
 
     [self tryFallback:trust
+     originalPolicies:originalPolicies
             completed:&completed
    completedWithError:&completedWithError
     completionHandler:completionHandler];
 
     if (completed) {
+        SecTrustSetPolicies(trust, originalPolicies);
         [self logWithFormat:@"Completed with fallback system check"];
         return TRUE;
     }
 
+    SecTrustSetPolicies(trust, originalPolicies);
     // Reject the protection space.
     // Do not use NSURLSessionAuthChallengePerformDefaultHandling because it can trigger
     // plaintext OCSP requests.
@@ -261,12 +277,25 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
 
 /// Helper to eliminate boilerplate
 - (void)evaluateWithPolicy:(SecPolicyRef)policy
+          originalPolicies:(CFArrayRef)originalPolicies
                      trust:(SecTrustRef)trust
                  completed:(BOOL*)completed
         completedWithError:(BOOL*)completedWithError
          completionHandler:(AuthCompletion)completionHandler {
 
-    OCSPSecTrustAddPolicy(trust, policy);
+    CFIndex policyCount = CFArrayGetCount(originalPolicies);
+    CFMutableArrayRef newPolicies = CFArrayCreateMutableCopy(NULL, policyCount+1, originalPolicies);
+    CFArrayAppendValue(newPolicies, policy);
+
+    OSStatus s = SecTrustSetPolicies(trust, newPolicies);
+    CFRelease(newPolicies);
+    CFRelease(policy);
+    if (s != 0) {
+        [self logWithFormat:@"Unexpected result code from SecTrustSetPolicies %d", s];
+        *completed = FALSE;
+        *completedWithError = FALSE;
+        return;
+    }
 
     [self evaluateTrust:trust
               completed:completed
@@ -277,6 +306,7 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
 /// Uses default checking with no remote calls.
 /// Succeeds if there is a pinned OCSP response or one was cached by the system.
 - (void)trySystemOCSPNoRemote:(SecTrustRef)trust
+             originalPolicies:(CFArrayRef)originalPolicies
                     completed:(BOOL*)completed
            completedWithError:(BOOL*)completedWithError
             completionHandler:(AuthCompletion)completionHandler {
@@ -284,6 +314,7 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
                                                     kSecRevocationRequirePositiveResponse |
                                                     kSecRevocationNetworkAccessDisabled);
     [self evaluateWithPolicy:policy
+            originalPolicies:originalPolicies
                        trust:trust
                    completed:completed
           completedWithError:completedWithError
@@ -294,6 +325,7 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
 
 /// Evaluate response from OCSP cache
 - (void)evaluateOCSPCacheResult:(NSArray<OCSPCacheLookupResult*>*)results
+               originalPolicies:(CFArrayRef)originalPolicies
                 evictedResponse:(BOOL*)evictedResponse
                           trust:(SecTrustRef)trust
                       completed:(BOOL*)completed
@@ -335,6 +367,7 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
                                                     kSecRevocationNetworkAccessDisabled);
 
     [self evaluateWithPolicy:policy
+            originalPolicies:originalPolicies
                        trust:trust
                    completed:completed
           completedWithError:completedWithError
@@ -365,6 +398,7 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
 
 /// Try default system CRL checking with a positive response required
 - (void)trySystemCRL:(SecTrustRef)trust
+    originalPolicies:(CFArrayRef)originalPolicies
            completed:(BOOL*)completed
   completedWithError:(BOOL*)completedWithError
    completionHandler:(AuthCompletion)completionHandler {
@@ -372,6 +406,7 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
                                                     kSecRevocationRequirePositiveResponse);
 
     [self evaluateWithPolicy:policy
+            originalPolicies:originalPolicies
                        trust:trust
                    completed:completed
           completedWithError:completedWithError
@@ -385,6 +420,7 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
 
 /// Basic system check with positive response not required
 - (void)tryFallback:(SecTrustRef)trust
+   originalPolicies:(CFArrayRef)originalPolicies
           completed:(BOOL*)completed
  completedWithError:(BOOL*)completedWithError
   completionHandler:(AuthCompletion)completionHandler {
@@ -392,6 +428,7 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
     SecPolicyRef policy = SecPolicyCreateRevocation(kSecRevocationCRLMethod);
 
     [self evaluateWithPolicy:policy
+            originalPolicies:originalPolicies
                        trust:trust
                    completed:completed
           completedWithError:completedWithError
@@ -411,7 +448,13 @@ modifyOCSPURLOverride:(nullable NSURL * _Nonnull (^)(NSURL * _Nonnull))modifyOCS
     completionHandler:(AuthCompletion)completionHandler {
 
     SecTrustResultType result;
-    SecTrustEvaluate(trust, &result);
+    OSStatus s = SecTrustEvaluate(trust, &result);
+    if (s != 0) {
+        [self logWithFormat:@"Unexpected result code from SecTrustEvaluate %d", s];
+        *completed = FALSE;
+        *completedWithError = FALSE;
+        return;
+    }
 
     if (result == kSecTrustResultProceed || result == kSecTrustResultUnspecified) {
         NSURLCredential *credential = [NSURLCredential credentialForTrust:trust];

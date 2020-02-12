@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'OCSPCache'
-  s.version          = '0.1.0'
+  s.version          = '0.1.1'
   s.summary          = 'OCSPCache is used for making OCSP requests and caching OCSP responses.'
   s.homepage         = 'https://psiphon3.com'
   s.license          = { :type => 'GNU General Public License v3.0' }

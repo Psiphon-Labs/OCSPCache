@@ -36,20 +36,11 @@ void OCSPSecTrustPrintProperties(SecTrustRef trust) {
 // See comment in header
 void OCSPSecTrustAddPolicy(SecTrustRef trust, SecPolicyRef policy) {
     CFArrayRef policies;
-
     SecTrustCopyPolicies(trust, &policies);
 
-    CFIndex policyCount = CFArrayGetCount(policies);
-    CFMutableArrayRef newPolicies = CFArrayCreateMutable(NULL, policyCount+1, NULL);
-
-    CFArrayAppendArray(newPolicies, policies, CFRangeMake(0, policyCount));
-    CFRelease(policies);
-
-    CFArrayAppendValue(newPolicies, policy);
-
-    SecTrustSetPolicies(trust, newPolicies);
-
-    CFRelease(newPolicies);
+    NSArray *newPolicies = (__bridge_transfer NSArray*)policies;
+    newPolicies = [newPolicies arrayByAddingObject:(__bridge_transfer id)policy];
+    SecTrustSetPolicies(trust, (__bridge CFArrayRef)newPolicies);
 }
 
 // See comment in header

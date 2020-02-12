@@ -172,6 +172,8 @@ NSErrorDomain _Nonnull const OCSPCertErrorDomain = @"OCSPCertErrorDomain";
                                  userInfo:@{NSLocalizedDescriptionKey:@"Failed to convert issuer "
                                             "cert to OpenSSL X509 "
                                             "object"}];
+        [OCSPCert execCleanupTasks:cleanup];
+        return nil;
     }
 
     [cleanup addObject:^(){
