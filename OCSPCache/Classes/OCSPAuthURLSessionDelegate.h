@@ -82,6 +82,7 @@ typedef void (^AuthCompletion)(NSURLSessionAuthChallengeDisposition, NSURLCreden
 /// of its issuer.
 /// @param completionHandler Completion handler from the NSURLSessionDelegate or NSURLSessionTaskDelegate
 /// authentication challenge.
+/// @warning The trust object will be modified and is not safe to access until the call completes.
 - (BOOL)evaluateTrust:(SecTrustRef)trust
     completionHandler:(AuthCompletion)completionHandler;
 
@@ -100,6 +101,7 @@ typedef void (^AuthCompletion)(NSURLSessionAuthChallengeDisposition, NSURLCreden
 /// initialized. This allows independent tasks to mange the NSURLSession used per trust evaluation.
 /// @param completionHandler Completion handler from the NSURLSessionDelegate or NSURLSessionTaskDelegate
 /// authentication challenge.
+/// @warning The trust object will be modified and is not safe to access until the call completes.
 - (BOOL)evaluateTrust:(SecTrustRef)trust
 modifyOCSPURLOverride:(NSURL* (^__nullable)(NSURL *url))modifyOCSPURLOverride
       sessionOverride:(NSURLSession*__nullable)sessionOverride

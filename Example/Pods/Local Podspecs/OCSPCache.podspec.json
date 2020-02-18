@@ -1,6 +1,6 @@
 {
   "name": "OCSPCache",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "summary": "OCSPCache is used for making OCSP requests and caching OCSP responses.",
   "homepage": "https://psiphon3.com",
   "license": {
@@ -14,7 +14,7 @@
   },
   "source": {
     "git": "https://github.com/Psiphon-Labs/OCSPCache.git",
-    "tag": "0.1.0"
+    "tag": "0.1.1"
   },
   "source_files": "OCSPCache/Classes/**/*",
   "dependencies": {
