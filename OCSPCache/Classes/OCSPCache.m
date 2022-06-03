@@ -198,6 +198,9 @@ NSErrorDomain _Nonnull const OCSPCacheErrorDomain = @"OCSPCacheErrorDomain";
 
     for (int i = 0; i < certCount-1; i++) {
         dispatch_group_enter(group);
+    }
+
+    for (int i = 0; i < certCount-1; i++) {
         SecCertificateRef issued = SecTrustGetCertificateAtIndex(secTrustRef, i);
         SecCertificateRef issuer = SecTrustGetCertificateAtIndex(secTrustRef, i+1);
 
